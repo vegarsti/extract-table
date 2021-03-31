@@ -1,11 +1,8 @@
-on: [push, pull_request]
+on: [push]
 name: deploy-lambda
 jobs:
   deploy:
     runs-on: ubuntu-18.04
-    defaults:
-      run:
-        working-directory: ./
     steps:
     - name: AWS login
       uses: aws-actions/configure-aws-credentials@v1
@@ -13,6 +10,8 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: eu-west-1
-    - run: "make"
+    - run: ls
+    - run: make
+      working-directory: ./
       env:
         LAMBDA_FUNCTION_NAME: ${{ secrets.LAMBDA_FUNCTION_NAME }}
