@@ -4,6 +4,7 @@ jobs:
   deploy:
     runs-on: ubuntu-18.04
     steps:
+    - uses: actions/checkout@v1
     - name: AWS login
       uses: aws-actions/configure-aws-credentials@v1
       with:
