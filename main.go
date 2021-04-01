@@ -54,8 +54,26 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	return &events.APIGatewayProxyResponse{
 		Headers:    map[string]string{"Content-Type": "application/json"},
 		StatusCode: 200,
-		Body:       fmt.Sprintf(`{"text": "%s"}`+"\n", text),
+		// Body:       req.Body, // THIS WORKS!!!!!!!!
+		// Body: fmt.Sprintf(`{"base64": "%t"}`, req.IsBase64Encoded),
+		Body: fmt.Sprintf(`{"text": "%s"}`+"\n", text),
+		// Body:       succ(s.Content),
+		// Body: succ(req.Body),
 	}, nil
+	/*
+		if err != nil {
+			return &events.APIGatewayProxyResponse{
+				Headers:    map[string]string{"Content-Type": "application/json"},
+				StatusCode: 400,
+				Body:       erro(err),
+			}, nil
+		}
+		return &events.APIGatewayProxyResponse{
+			Headers:    map[string]string{"Content-Type": "application/json"},
+			StatusCode: 200,
+			Body:       succ(text),
+		}, nil
+	*/
 }
 
 func extract(b []byte) (string, error) {
