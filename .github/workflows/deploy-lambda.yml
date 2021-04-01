@@ -1,5 +1,5 @@
-on: [push]
 name: deploy-lambda
+on: [push]
 jobs:
   deploy:
     runs-on: ubuntu-18.04
