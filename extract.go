@@ -4,8 +4,6 @@ import (
 	"sort"
 )
 
-var awsRegion string
-
 type Word struct {
 	Text    string
 	LeftX   float64
