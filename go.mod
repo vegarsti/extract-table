@@ -1,4 +1,4 @@
-module github.com/vegarsti/extract-table
+module github.com/vegarsti/extract
 
 go 1.16
 
