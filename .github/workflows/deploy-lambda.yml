@@ -1,5 +1,8 @@
 name: deploy-lambda
-on: [push]
+on:
+  push:
+    branches:
+      - main
 jobs:
   deploy:
     runs-on: ubuntu-18.04
