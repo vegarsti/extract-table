@@ -58,7 +58,7 @@ func writeTable(table [][]string) {
 	w := tabwriter.NewWriter(os.Stdout, 4, 4, 2, ' ', tabwriter.Debug)
 	for _, row := range table {
 		for j, cell := range row {
-			fmt.Fprintf(w, cell)
+			fmt.Fprint(w, cell)
 			if j < len(row)-1 {
 				fmt.Fprintf(w, "\t")
 			}
