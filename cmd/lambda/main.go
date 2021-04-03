@@ -52,7 +52,10 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 			Body:       fmt.Sprintf(`{"error": "failed to convert to table: %s"}`+"\n", err.Error()),
 		}, nil
 	}
-	bs, err := json.Marshal(table)
+	body := struct {
+		Rows [][]string `json:"rows"`
+	}{table}
+	bodyBytes, err := json.Marshal(body)
 	if err != nil {
 		return &events.APIGatewayProxyResponse{
 			Headers:    map[string]string{"Content-Type": "application/json"},
@@ -60,11 +63,11 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 			Body:       fmt.Sprintf(`{"error": "failed to convert to json: %s"}`+"\n", err.Error()),
 		}, nil
 	}
-	rows := string(bs)
+	bodyString := string(bodyBytes)
 	return &events.APIGatewayProxyResponse{
 		Headers:    map[string]string{"Content-Type": "application/json"},
 		StatusCode: 200,
-		Body:       fmt.Sprintf(`{"rows": "%s"}`+"\n", rows),
+		Body:       bodyString,
 	}, nil
 }
 
