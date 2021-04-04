@@ -55,10 +55,14 @@ func ToTable(output *textract.DetectDocumentTextOutput) ([][]string, error) {
 	for i, interval := range intervals {
 		splitAt[i] = interval[0] + ((interval[1] - interval[0]) / 2)
 	}
+
 	// how many columns?
-	nColumns := 3
-	nSplits := nColumns - 1
-	splitAt = splitAt[:nSplits]
+	/*
+		nColumns := 3
+		nSplits := nColumns - 1
+		splitAt = splitAt[:nSplits]
+	*/
+
 	sort.Float64s(splitAt)
 
 	rows := extract.PartitionIntoRows(words)
