@@ -2,7 +2,6 @@ package textract
 
 import (
 	"math"
-	"sort"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -47,26 +46,15 @@ func ToTable(output *textract.DetectDocumentTextOutput) ([][]string, error) {
 		}
 		words = append(words, w)
 	}
-
-	// find partitions
-	intervals := extract.FindGroups(words)
-	sort.Sort(extract.BySize(intervals))
-	splitAt := make([]float64, len(intervals))
-	for i, interval := range intervals {
-		splitAt[i] = interval[0] + ((interval[1] - interval[0]) / 2)
-	}
-
-	// how many columns?
-	/*
-		nColumns := 3
-		nSplits := nColumns - 1
-		splitAt = splitAt[:nSplits]
-	*/
-
-	sort.Float64s(splitAt)
-
 	rows := extract.PartitionIntoRows(words)
 
+	//
+	splitAt := extract.FindSplits(words)
+	table := toTable(rows, splitAt, extract.SplitRowBoxesEdge)
+	return table, nil
+}
+
+func toTable(rows [][]extract.Word, splitAt []float64, splitFunc func([]extract.Word, []float64) [][]extract.Word) [][]string {
 	// initialize table
 	table := make([][]string, len(rows))
 	for i := range rows {
@@ -75,7 +63,7 @@ func ToTable(output *textract.DetectDocumentTextOutput) ([][]string, error) {
 
 	// populate table
 	for i, rowBoxes := range rows {
-		cellsBoxes := extract.SplitRowBoxes(rowBoxes, splitAt)
+		cellsBoxes := splitFunc(rowBoxes, splitAt)
 		for j, cell := range cellsBoxes {
 			wordsInCell := make([]string, len(cell))
 			for k, w := range cell {
@@ -84,5 +72,5 @@ func ToTable(output *textract.DetectDocumentTextOutput) ([][]string, error) {
 			table[i][j] = strings.TrimSpace(strings.Join(wordsInCell, " "))
 		}
 	}
-	return table, nil
+	return table
 }

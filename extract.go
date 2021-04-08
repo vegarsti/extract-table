@@ -61,8 +61,10 @@ func (s BySize) Less(i, j int) bool {
 }
 
 // words need to be sorted by xLeft
-func FindGroups(words []Word) [][2]float64 {
+// returns splits sorted by size
+func FindSplits(words []Word) []float64 {
 	// sort words by xleft
+	// TODO: This might need refinement?
 	sort.Sort(byXLeft(words))
 	splits := make([][2]float64, 0)
 	xRight := float64(0)
@@ -70,13 +72,32 @@ func FindGroups(words []Word) [][2]float64 {
 		if w.LeftX > xRight && i > 0 {
 			splits = append(splits, [2]float64{xRight, w.LeftX})
 		}
-		xRight = w.RightX
+		if w.RightX > xRight {
+			xRight = w.RightX
+		}
 	}
 	sort.Sort(BySize(splits))
-	return splits
+	splitAt := make([]float64, len(splits))
+	for i, interval := range splits {
+		splitAt[i] = interval[0] + ((interval[1] - interval[0]) / 2)
+	}
+	sort.Float64s(splitAt)
+	return splitAt
 }
 
-func SplitRowBoxes(words []Word, xs []float64) [][]Word {
+func SplitRowBoxesMidpoint(words []Word, xs []float64) [][]Word {
+	midpoint := func(word Word) float64 { return word.LeftX + (word.RightX-word.LeftX)/2 }
+	partitions := SplitRowBoxesFunc(words, xs, midpoint)
+	return partitions
+}
+
+func SplitRowBoxesEdge(words []Word, xs []float64) [][]Word {
+	leftX := func(word Word) float64 { return word.LeftX }
+	partitions := SplitRowBoxesFunc(words, xs, leftX)
+	return partitions
+}
+
+func SplitRowBoxesFunc(words []Word, xs []float64, f func(Word) float64) [][]Word {
 	sort.Sort(byXLeft(words))
 	partitions := make([][]Word, len(xs)+1)
 	for i := range partitions {
@@ -85,7 +106,7 @@ func SplitRowBoxes(words []Word, xs []float64) [][]Word {
 
 	i := 0
 	for _, word := range words {
-		if i < len(xs) && word.LeftX > xs[i] {
+		if i < len(xs) && f(word) > xs[i] {
 			i++
 		}
 		partitions[i] = append(partitions[i], word)
