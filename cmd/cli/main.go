@@ -33,7 +33,7 @@ func main() {
 	if err != nil {
 		die(err)
 	}
-	table, err := textract.ToTable(output)
+	table, err := textract.ToTableFromDetectedTable(output)
 	if err != nil {
 		die(err)
 	}
