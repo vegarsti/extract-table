@@ -44,7 +44,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 			Body:       fmt.Sprintf(`{"error": "failed to extract: %s"}`+"\n", err.Error()),
 		}, nil
 	}
-	table, err := textract.ToTable(output)
+	table, err := textract.ToTableFromDetectedTable(output)
 	if err != nil {
 		return &events.APIGatewayProxyResponse{
 			Headers:    map[string]string{"Content-Type": "application/json"},
