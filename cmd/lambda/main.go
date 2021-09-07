@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"encoding/base64"
 	"encoding/json"
@@ -36,6 +37,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 			Body:       fmt.Sprintf(`{"error": "unable to create session: %s"}`+"\n", err.Error()),
 		}, nil
 	}
+	start := time.Now()
 	output, err := textract.Extract(mySession, b)
 	if err != nil {
 		return &events.APIGatewayProxyResponse{
@@ -44,6 +46,8 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 			Body:       fmt.Sprintf(`{"error": "failed to extract: %s"}`+"\n", err.Error()),
 		}, nil
 	}
+	end := time.Now()
+	t := end.Sub(start)
 	table, err := textract.ToTableFromDetectedTable(output)
 	if err != nil {
 		return &events.APIGatewayProxyResponse{
@@ -54,7 +58,8 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	}
 	body := struct {
 		Rows [][]string `json:"rows"`
-	}{table}
+		Time string
+	}{table, t.String()}
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
 		return &events.APIGatewayProxyResponse{
