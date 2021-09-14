@@ -2,3 +2,5 @@
 main
 cli
 *.txt
+*.png
+*.pdf
