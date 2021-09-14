@@ -15,7 +15,7 @@ import (
 
 func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
 	if !req.IsBase64Encoded {
-		types := []string{"image/png", "image/jpg", "application/pdf"}
+		types := []string{"image/png", "image/jpeg", "application/pdf"}
 		return &events.APIGatewayProxyResponse{
 			Headers:    map[string]string{"Content-Type": "application/json"},
 			StatusCode: 400,
