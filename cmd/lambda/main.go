@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"encoding/base64"
 	"encoding/json"
@@ -14,10 +15,11 @@ import (
 
 func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
 	if !req.IsBase64Encoded {
+		types := []string{"image/png", "image/jpg", "application/pdf"}
 		return &events.APIGatewayProxyResponse{
 			Headers:    map[string]string{"Content-Type": "application/json"},
 			StatusCode: 400,
-			Body:       `{"error": "request body must have content-type image/png"}` + "\n",
+			Body:       fmt.Sprintf(`{"error": "request body must have a content-type that is one of [%s]"}`, strings.Join(types, ", ")) + "\n",
 		}, nil
 	}
 	b, err := base64.StdEncoding.DecodeString(req.Body)
