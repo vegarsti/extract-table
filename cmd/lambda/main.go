@@ -16,22 +16,22 @@ import (
 
 func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
 	if !req.IsBase64Encoded {
-		return errorResponse("request body must have a content-type that is either image/png or image/jpeg"), nil
+		return errorResponse(fmt.Errorf("request body must have a content-type that is either image/png or image/jpeg")), nil
 	}
 	imageBytes, err := base64.StdEncoding.DecodeString(req.Body)
 	if err != nil {
-		return errorResponse(fmt.Sprintf("unable to convert base64 to bytes: %s", err.Error())), nil
+		return errorResponse(fmt.Errorf("unable to convert base64 to bytes: %w", err)), nil
 	}
 	sess, err := session.NewSession()
 	if err != nil {
-		return errorResponse(fmt.Sprintf("unable to create session: %s", err.Error())), nil
+		return errorResponse(fmt.Errorf("unable to create session: %w", err)), nil
 	}
 
 	// Check if table is stored
 	checksum := md5.Sum(imageBytes)
 	storedBytes, err := dynamodb.GetTable(sess, checksum[:])
 	if err != nil {
-		return errorResponse(fmt.Sprintf("dynamodb.GetTable: %s", err.Error())), nil
+		return errorResponse(fmt.Errorf("dynamodb.GetTable: %w", err)), nil
 	}
 	if storedBytes != nil {
 		return successResponse(storedBytes), nil
@@ -39,28 +39,28 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 
 	output, err := textract.Extract(sess, imageBytes)
 	if err != nil {
-		return errorResponse(fmt.Sprintf("failed to extract: %s", err.Error())), nil
+		return errorResponse(fmt.Errorf("failed to extract: %w", err)), nil
 	}
 	table, err := textract.ToTableFromDetectedTable(output)
 	if err != nil {
-		return errorResponse(fmt.Sprintf("failed to convert to table: %s", err.Error())), nil
+		return errorResponse(fmt.Errorf("failed to convert to table: %w", err)), nil
 	}
 
 	tableBytes, err := json.MarshalIndent(table, "", "  ")
 	if err != nil {
-		return errorResponse(fmt.Sprintf("failed to convert to json: %s", err.Error())), nil
+		return errorResponse(fmt.Errorf("failed to convert to json: %w", err)), nil
 	}
 	if err := dynamodb.PutTable(sess, checksum[:], tableBytes); err != nil {
-		return errorResponse(fmt.Sprintf("dynamodb.PutTable: %s", err.Error())), nil
+		return errorResponse(fmt.Errorf("dynamodb.PutTable: %w", err)), nil
 	}
 	return successResponse(tableBytes), nil
 }
 
-func errorResponse(message string) *events.APIGatewayProxyResponse {
+func errorResponse(err error) *events.APIGatewayProxyResponse {
 	return &events.APIGatewayProxyResponse{
 		Headers:    map[string]string{"Content-Type": "application/json"},
 		StatusCode: 400,
-		Body:       fmt.Sprintf(`{"error": "%s"}`+"\n", message),
+		Body:       fmt.Sprintf(`{"error": "%s"}`+"\n", err.Error()),
 	}
 }
 
