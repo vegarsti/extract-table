@@ -11,8 +11,8 @@ import (
 	"github.com/vegarsti/extract"
 )
 
-func Extract(mySession *session.Session, bs []byte) (*textract.AnalyzeDocumentOutput, error) {
-	svc := textract.New(mySession)
+func Extract(sess *session.Session, bs []byte) (*textract.AnalyzeDocumentOutput, error) {
+	svc := textract.New(sess)
 	tables := "TABLES"
 	input := &textract.AnalyzeDocumentInput{
 		Document:     &textract.Document{Bytes: bs},
@@ -98,14 +98,17 @@ func textInCellBlock(blocks map[string]*textract.Block, cell *textract.Block) st
 	return strings.Join(words, " ")
 }
 
-func ToTable(output *textract.AnalyzeDocumentOutput) ([][]string, error) {
+func ToTableWithSplitHeuristic(output *textract.AnalyzeDocumentOutput) ([][]string, error) {
 	words := make([]extract.Word, 0)
 	for _, block := range output.Blocks {
 		if *block.BlockType != "WORD" {
 			continue
 		}
-		var w extract.Word
-		w.Text = *block.Text
+		w := extract.Word{
+			Text:  *block.Text,
+			LeftX: 1,
+			TopY:  1,
+		}
 		/*
 			Coordinate system
 				topLeft := {x: 0, y: 0}
@@ -113,8 +116,6 @@ func ToTable(output *textract.AnalyzeDocumentOutput) ([][]string, error) {
 				bottomLeft := {x: 1, y: 0}
 				bottomRight := {x: 1, y: 1}
 		*/
-		w.LeftX = 1
-		w.TopY = 1
 		for _, boundingBox := range block.Geometry.Polygon {
 			w.LeftX = math.Min(w.LeftX, *boundingBox.X)
 			w.RightX = math.Max(w.RightX, *boundingBox.X)
@@ -124,8 +125,6 @@ func ToTable(output *textract.AnalyzeDocumentOutput) ([][]string, error) {
 		words = append(words, w)
 	}
 	rows := extract.PartitionIntoRows(words)
-
-	//
 	splitAt := extract.FindSplits(words)
 	table := toTable(rows, splitAt, extract.SplitRowBoxesEdge)
 	return table, nil

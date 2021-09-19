@@ -64,7 +64,6 @@ func (s BySize) Less(i, j int) bool {
 // returns splits sorted by size
 func FindSplits(words []Word) []float64 {
 	// sort words by xleft
-	// TODO: This might need refinement?
 	sort.Sort(byXLeft(words))
 	splits := make([][2]float64, 0)
 	xRight := float64(0)
@@ -79,7 +78,10 @@ func FindSplits(words []Word) []float64 {
 	sort.Sort(BySize(splits))
 	splitAt := make([]float64, len(splits))
 	for i, interval := range splits {
-		splitAt[i] = interval[0] + ((interval[1] - interval[0]) / 2)
+		start := interval[0]
+		end := interval[1]
+		length := end - start
+		splitAt[i] = start + length/2
 	}
 	sort.Float64s(splitAt)
 	return splitAt
