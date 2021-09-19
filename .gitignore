@@ -1,7 +1,4 @@
 *.zip
-main
+lambda
 cli
 *.txt
-*.png
-*.pdf
-*.jpg
