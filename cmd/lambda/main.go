@@ -18,7 +18,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	if !req.IsBase64Encoded {
 		return errorResponse("request body must have a content-type that is either image/png or image/jpeg"), nil
 	}
-	b, err := base64.StdEncoding.DecodeString(req.Body)
+	imageBytes, err := base64.StdEncoding.DecodeString(req.Body)
 	if err != nil {
 		return errorResponse(fmt.Sprintf("unable to convert base64 to bytes: %s", err.Error())), nil
 	}
@@ -28,7 +28,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	}
 
 	// Check if table is stored
-	checksum := md5.Sum(b)
+	checksum := md5.Sum(imageBytes)
 	storedBytes, err := dynamodb.GetTable(mySession, checksum[:])
 	if err != nil {
 		return errorResponse(fmt.Sprintf("dynamodb.GetTable: %s", err.Error())), nil
@@ -37,7 +37,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return successResponse(storedBytes), nil
 	}
 
-	output, err := textract.Extract(mySession, b)
+	output, err := textract.Extract(mySession, imageBytes)
 	if err != nil {
 		return errorResponse(fmt.Sprintf("failed to extract: %s", err.Error())), nil
 	}
