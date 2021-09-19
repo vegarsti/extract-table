@@ -22,14 +22,14 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	if err != nil {
 		return errorResponse(fmt.Sprintf("unable to convert base64 to bytes: %s", err.Error())), nil
 	}
-	mySession, err := session.NewSession()
+	sess, err := session.NewSession()
 	if err != nil {
 		return errorResponse(fmt.Sprintf("unable to create session: %s", err.Error())), nil
 	}
 
 	// Check if table is stored
 	checksum := md5.Sum(imageBytes)
-	storedBytes, err := dynamodb.GetTable(mySession, checksum[:])
+	storedBytes, err := dynamodb.GetTable(sess, checksum[:])
 	if err != nil {
 		return errorResponse(fmt.Sprintf("dynamodb.GetTable: %s", err.Error())), nil
 	}
@@ -37,7 +37,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return successResponse(storedBytes), nil
 	}
 
-	output, err := textract.Extract(mySession, imageBytes)
+	output, err := textract.Extract(sess, imageBytes)
 	if err != nil {
 		return errorResponse(fmt.Sprintf("failed to extract: %s", err.Error())), nil
 	}
@@ -50,7 +50,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	if err != nil {
 		return errorResponse(fmt.Sprintf("failed to convert to json: %s", err.Error())), nil
 	}
-	if err := dynamodb.PutTable(mySession, checksum[:], tableBytes); err != nil {
+	if err := dynamodb.PutTable(sess, checksum[:], tableBytes); err != nil {
 		return errorResponse(fmt.Sprintf("dynamodb.PutTable: %s", err.Error())), nil
 	}
 	return successResponse(tableBytes), nil
