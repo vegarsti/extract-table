@@ -1,12 +1,15 @@
 package main
 
 import (
+	"crypto/md5"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"text/tabwriter"
 
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/vegarsti/extract/dynamodb"
 	"github.com/vegarsti/extract/textract"
 )
 
@@ -29,6 +32,20 @@ func main() {
 	if err != nil {
 		die(err)
 	}
+
+	// Check if table is stored
+	checksum := md5.Sum(b)
+	storedBytes, err := dynamodb.GetTable(mySession, checksum[:])
+	if err != nil {
+		die(err)
+	}
+	if storedBytes != nil {
+		var table [][]string
+		json.Unmarshal(storedBytes, &table)
+		writeTable(table)
+		return
+	}
+
 	output, err := textract.Extract(mySession, b)
 	if err != nil {
 		die(err)
@@ -38,6 +55,15 @@ func main() {
 		die(err)
 	}
 	writeTable(table)
+
+	// store in dynamo db
+	tableJSON, err := json.Marshal(table)
+	if err != nil {
+		die(err)
+	}
+	if err := dynamodb.PutTable(mySession, checksum[:], tableJSON); err != nil {
+		die(err)
+	}
 }
 
 func readEnvVars() error {
