@@ -2,10 +2,11 @@ package main
 
 import (
 	"crypto/md5"
-	"fmt"
-
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"mime"
+	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -19,23 +20,50 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	if !req.IsBase64Encoded {
 		return errorResponse(fmt.Errorf("request body must have a content-type that is either image/png or image/jpeg")), nil
 	}
-	imageBytes, err := base64.StdEncoding.DecodeString(req.Body)
+
+	decodedBodyBytes, err := base64.StdEncoding.DecodeString(req.Body)
 	if err != nil {
 		return errorResponse(fmt.Errorf("unable to convert base64 to bytes: %w", err)), nil
 	}
+
+	// Determine whether to return HTML or JSON by looking at the Accept HTTP header
+	// The header is on the form `accept: text/html, application/xhtml+xml, application/xml;q=0.9, */*;q=0.8`,
+	// where the content types are listed in preferred order.
+	var returnHTML bool
+	acceptResponseTypesRaw := req.Headers["accept"]
+	acceptResponseTypes := strings.Split(acceptResponseTypesRaw, ",")
+	acceptResponseTypesLowestToHighestPriority := make([]string, len(acceptResponseTypes))
+	for i, e := range acceptResponseTypes {
+		mediaType, _, err := mime.ParseMediaType(e)
+		if err != nil {
+			return errorResponse(fmt.Errorf("unable to parse media type: %w", err)), nil
+		}
+		acceptResponseTypesLowestToHighestPriority[len(acceptResponseTypes)-1-i] = mediaType
+	}
+	for _, value := range acceptResponseTypesLowestToHighestPriority {
+		if value == "text/html" {
+			returnHTML = true
+		}
+		if value == "application/json" {
+			returnHTML = false
+		}
+	}
+
 	sess, err := session.NewSession()
 	if err != nil {
 		return errorResponse(fmt.Errorf("unable to create session: %w", err)), nil
 	}
 
 	// Check if table is stored
-	checksum := md5.Sum(imageBytes)
+	checksum := md5.Sum(decodedBodyBytes)
 	storedBytes, err := dynamodb.GetTable(sess, checksum[:])
 	if err != nil {
 		return errorResponse(fmt.Errorf("dynamodb.GetTable: %w", err)), nil
 	}
 	if storedBytes != nil {
-		// return JSONSuccessResponse(tableBytes), nil
+		if !returnHTML {
+			return JSONSuccessResponse(storedBytes), nil
+		}
 		var table [][]string
 		if err := json.Unmarshal(storedBytes, &table); err != nil {
 			return errorResponse(fmt.Errorf("failed to convert from json: %w", err)), nil
@@ -44,7 +72,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return HTMLSuccessResponse(tableHTML), nil
 	}
 
-	output, err := textract.Extract(sess, imageBytes)
+	output, err := textract.Extract(sess, decodedBodyBytes)
 	if err != nil {
 		return errorResponse(fmt.Errorf("failed to extract: %w", err)), nil
 	}
@@ -60,8 +88,10 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	if err := dynamodb.PutTable(sess, checksum[:], tableBytes); err != nil {
 		return errorResponse(fmt.Errorf("dynamodb.PutTable: %w", err)), nil
 	}
+	if !returnHTML {
+		return JSONSuccessResponse(tableBytes), nil
+	}
 	tableHTML := html.FromTable(table)
-	// return JSONSuccessResponse(tableBytes), nil
 	return HTMLSuccessResponse(tableHTML), nil
 }
 
