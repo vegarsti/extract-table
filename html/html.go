@@ -18,14 +18,10 @@ type Table struct {
 }
 
 var tmplString = `
-<table>
-	{{range .Rows}}
-	<tr>
-		{{range .Cells}}
-		<td>{{.Text}}</td>
-		{{end}}
-	</tr>
-	{{end}}
+<table>{{range .Rows}}
+	<tr>{{range .Cells}}
+		<td>{{.Text}}</td>{{end}}
+	</tr>{{end}}
 </table>
 `
 
