@@ -35,7 +35,13 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return errorResponse(fmt.Errorf("dynamodb.GetTable: %w", err)), nil
 	}
 	if storedBytes != nil {
-		return JSONSuccessResponse(storedBytes), nil
+		// return JSONSuccessResponse(tableBytes), nil
+		var table [][]string
+		if err := json.Unmarshal(storedBytes, &table); err != nil {
+			return errorResponse(fmt.Errorf("failed to convert from json: %w", err)), nil
+		}
+		tableHTML := html.FromTable(table)
+		return HTMLSuccessResponse(tableHTML), nil
 	}
 
 	output, err := textract.Extract(sess, imageBytes)
@@ -55,7 +61,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return errorResponse(fmt.Errorf("dynamodb.PutTable: %w", err)), nil
 	}
 	tableHTML := html.FromTable(table)
-	// return successResponse(tableBytes), nil
+	// return JSONSuccessResponse(tableBytes), nil
 	return HTMLSuccessResponse(tableHTML), nil
 }
 
