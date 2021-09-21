@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/vegarsti/extract/dynamodb"
+	"github.com/vegarsti/extract/html"
 	"github.com/vegarsti/extract/textract"
 )
 
@@ -34,7 +35,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return errorResponse(fmt.Errorf("dynamodb.GetTable: %w", err)), nil
 	}
 	if storedBytes != nil {
-		return successResponse(storedBytes), nil
+		return JSONSuccessResponse(storedBytes), nil
 	}
 
 	output, err := textract.Extract(sess, imageBytes)
@@ -53,7 +54,9 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	if err := dynamodb.PutTable(sess, checksum[:], tableBytes); err != nil {
 		return errorResponse(fmt.Errorf("dynamodb.PutTable: %w", err)), nil
 	}
-	return successResponse(tableBytes), nil
+	tableHTML := html.FromTable(table)
+	// return successResponse(tableBytes), nil
+	return HTMLSuccessResponse(tableHTML), nil
 }
 
 func errorResponse(err error) *events.APIGatewayProxyResponse {
@@ -64,7 +67,15 @@ func errorResponse(err error) *events.APIGatewayProxyResponse {
 	}
 }
 
-func successResponse(tableBytes []byte) *events.APIGatewayProxyResponse {
+func HTMLSuccessResponse(tableHTML string) *events.APIGatewayProxyResponse {
+	return &events.APIGatewayProxyResponse{
+		Headers:    map[string]string{"Content-Type": "text/html"},
+		StatusCode: 200,
+		Body:       tableHTML + "\n",
+	}
+}
+
+func JSONSuccessResponse(tableBytes []byte) *events.APIGatewayProxyResponse {
 	return &events.APIGatewayProxyResponse{
 		Headers:    map[string]string{"Content-Type": "application/json"},
 		StatusCode: 200,
