@@ -20,7 +20,7 @@ import (
 
 func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
 	if !req.IsBase64Encoded {
-		return errorResponse(fmt.Errorf("request body must have a content-type that is either image/png or image/jpeg")), nil
+		return errorResponse(fmt.Errorf("request body must have a content-type that is either image/png, image/jpeg, or multipart/form-data")), nil
 	}
 
 	decodedBodyBytes, err := base64.StdEncoding.DecodeString(req.Body)
