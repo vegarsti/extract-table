@@ -5,7 +5,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"mime"
+	"mime/multipart"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -24,6 +26,33 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	decodedBodyBytes, err := base64.StdEncoding.DecodeString(req.Body)
 	if err != nil {
 		return errorResponse(fmt.Errorf("unable to convert base64 to bytes: %w", err)), nil
+	}
+
+	mediaType, params, err := mime.ParseMediaType(req.Headers["content-type"])
+	if err != nil {
+		return errorResponse(fmt.Errorf("failed to parse media type': %w", err)), nil
+	}
+	if mediaType == "multipart/form-data" {
+		decodedBody := string(decodedBodyBytes)
+		reader := multipart.NewReader(strings.NewReader(decodedBody), params["boundary"])
+		tenMBInBytes := 10000000
+		form, err := reader.ReadForm(int64(tenMBInBytes))
+		if err != nil {
+			return errorResponse(fmt.Errorf("failed to read form': %w", err)), nil
+		}
+		file, ok := form.File["image"]
+		if !ok {
+			return errorResponse(fmt.Errorf("no file in form field 'image'")), nil
+		}
+		f, err := file[0].Open()
+		if err != nil {
+			return errorResponse(fmt.Errorf("failed to open file': %w", err)), nil
+		}
+		data, err := ioutil.ReadAll(f)
+		if err != nil {
+			return errorResponse(fmt.Errorf("failed to read file': %w", err)), nil
+		}
+		decodedBodyBytes = data
 	}
 
 	// Determine whether to return HTML or JSON by looking at the Accept HTTP header
