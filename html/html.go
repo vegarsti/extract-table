@@ -18,11 +18,25 @@ type Table struct {
 }
 
 var tmplString = `
-<table>{{range .Rows}}
-	<tr>{{range .Cells}}
-		<td>{{.Text}}</td>{{end}}
-	</tr>{{end}}
-</table>
+<!DOCTYPE html>
+<html>
+	<head>
+		<style>
+			table, th, td {
+				border: 1px solid black;
+				border-collapse: collapse;
+				padding: 5px;
+			}
+		</style>
+	</head>
+	<body>
+		<table>{{range .Rows}}
+			<tr>{{range .Cells}}
+				<td>{{.Text}}</td>{{end}}
+			</tr>{{end}}
+		</table>
+	</body>
+</html>
 `
 
 var tmpl = template.Must(template.New("table").Parse(tmplString))
