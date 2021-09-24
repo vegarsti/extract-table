@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"mime"
 	"mime/multipart"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/vegarsti/extract/csv"
 	"github.com/vegarsti/extract/dynamodb"
 	"github.com/vegarsti/extract/html"
+	"github.com/vegarsti/extract/s3"
 	"github.com/vegarsti/extract/textract"
 )
 
@@ -62,6 +64,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 
 	checksum := sha256.Sum256(imageBytes)
 	identifier := fmt.Sprintf("%x", checksum)
+	url := fmt.Sprintf("https://extract-table.s3.eu-west-1.amazonaws.com/%s", identifier)
 
 	sess, err := session.NewSession()
 	if err != nil {
@@ -91,6 +94,11 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		if err := dynamodb.PutTable(sess, checksum[:], tableBytes); err != nil {
 			return errorResponse(fmt.Errorf("dynamodb.PutTable: %w", err)), nil
 		}
+
+		csvBytes := []byte(csv.FromTable(table))
+		if err := s3.Upload(sess, identifier, imageBytes, csvBytes); err != nil {
+			return errorResponse(fmt.Errorf("s3.Upload: %w", err)), nil
+		}
 	} else {
 		if err := json.Unmarshal(tableBytes, &table); err != nil {
 			return errorResponse(fmt.Errorf("failed to convert from json: %w", err)), nil
@@ -99,14 +107,19 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 
 	// Format media type responses
 	jsonBody := string(tableBytes) + "\n"
-	htmlBody := html.FromTable(table) + "\n"
+	imageURL := url + ".png"
+	csvURL := url + ".csv"
+	htmlBody := html.FromTable(table, imageURL, csvURL) + "\n"
 	csvBody := csv.FromTable(table)
 
+	log.Println("formatted responses")
+
 	// Determine what media type to return by looking at the Accept HTTP header
-	// The header is on the form `accept: text/html, application/xhtml+xml, application/xml;q=0.9, */*;q=0.8`,
+	// The header is on the form accept: text/html, application/xhtml+xml, application/xml;q=0.9
 	// where the content types are listed in preferred order.
 	acceptResponseTypes := strings.Split(req.Headers["accept"], ",")
-	for _, e := range acceptResponseTypes {
+	for i, e := range acceptResponseTypes {
+		log.Println(i, e)
 		mediaType, _, err := mime.ParseMediaType(e)
 		if err != nil {
 			return errorResponse(fmt.Errorf("unable to parse media type '%s' in Accept header: %w", e, err)), nil
@@ -121,7 +134,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 			return successResponse(csvBody, mediaType), nil
 		}
 	}
-	return successResponse(jsonBody, mediaType), nil
+	return successResponse(jsonBody, "application/json"), nil
 }
 
 func errorResponse(err error) *events.APIGatewayProxyResponse {
@@ -132,7 +145,8 @@ func errorResponse(err error) *events.APIGatewayProxyResponse {
 	}
 }
 
-func successResponse(mediaType string, body string) *events.APIGatewayProxyResponse {
+func successResponse(body string, mediaType string) *events.APIGatewayProxyResponse {
+	log.Println("in successResponse")
 	return &events.APIGatewayProxyResponse{
 		Headers:    map[string]string{"Content-Type": mediaType},
 		StatusCode: 200,

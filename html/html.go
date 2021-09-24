@@ -2,6 +2,7 @@ package html
 
 import (
 	"bytes"
+	"log"
 	"text/template"
 )
 
@@ -14,7 +15,9 @@ type Row struct {
 }
 
 type Table struct {
-	Rows []Row
+	Rows     []Row
+	ImageURL string
+	CSVURL   string
 }
 
 var tmplString = `
@@ -35,14 +38,19 @@ var tmplString = `
 				<td>{{.Text}}</td>{{end}}
 			</tr>{{end}}
 		</table>
+		<img src="{{.ImageURL}}">
+		<a href="{{.CSVURL}}">Download CSV.</a>
 	</body>
 </html>
 `
 
 var tmpl = template.Must(template.New("table").Parse(tmplString))
 
-func FromTable(stringTable [][]string) string {
-	var table Table
+func FromTable(stringTable [][]string, imageURL string, csvURL string) string {
+	table := Table{
+		ImageURL: imageURL,
+		CSVURL:   csvURL,
+	}
 	for _, row := range stringTable {
 		var r Row
 		for _, cell := range row {
@@ -52,5 +60,7 @@ func FromTable(stringTable [][]string) string {
 	}
 	buf := bytes.NewBufferString("")
 	tmpl.Execute(buf, table)
-	return buf.String()
+	s := buf.String()
+	log.Println("html", s)
+	return s
 }
