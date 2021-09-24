@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/base64"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -111,6 +113,15 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		if mediaType == "application/json" {
 			return JSONSuccessResponse(tableBytes), nil
 		}
+		if mediaType == "text/csv" {
+			s := &bytes.Buffer{}
+			writer := csv.NewWriter(s)
+			for _, row := range table {
+				writer.Write(row)
+			}
+			writer.Flush()
+			return CSVSuccessResponse(s.String()), nil
+		}
 	}
 	return JSONSuccessResponse(tableBytes), nil
 }
@@ -128,6 +139,14 @@ func HTMLSuccessResponse(tableHTML string) *events.APIGatewayProxyResponse {
 		Headers:    map[string]string{"Content-Type": "text/html"},
 		StatusCode: 200,
 		Body:       tableHTML + "\n",
+	}
+}
+
+func CSVSuccessResponse(tableString string) *events.APIGatewayProxyResponse {
+	return &events.APIGatewayProxyResponse{
+		Headers:    map[string]string{"Content-Type": "text/csv"},
+		StatusCode: 200,
+		Body:       tableString,
 	}
 }
 
