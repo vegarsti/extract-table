@@ -95,33 +95,24 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		}
 	}
 
-	// Determine whether to return HTML or JSON by looking at the Accept HTTP header
+	// Determine what media type to return by looking at the Accept HTTP header
 	// The header is on the form `accept: text/html, application/xhtml+xml, application/xml;q=0.9, */*;q=0.8`,
 	// where the content types are listed in preferred order.
-	var returnHTML bool
 	acceptResponseTypesRaw := req.Headers["accept"]
 	acceptResponseTypes := strings.Split(acceptResponseTypesRaw, ",")
-	acceptResponseTypesLowestToHighestPriority := make([]string, len(acceptResponseTypes))
-	for i, e := range acceptResponseTypes {
+	for _, e := range acceptResponseTypes {
 		mediaType, _, err := mime.ParseMediaType(e)
 		if err != nil {
 			return errorResponse(fmt.Errorf("unable to parse media type: %w", err)), nil
 		}
-		acceptResponseTypesLowestToHighestPriority[len(acceptResponseTypes)-1-i] = mediaType
-	}
-	for _, value := range acceptResponseTypesLowestToHighestPriority {
-		if value == "text/html" {
-			returnHTML = true
+		if mediaType == "text/html" {
+			return HTMLSuccessResponse(html.FromTable(table)), nil
 		}
-		if value == "application/json" {
-			returnHTML = false
+		if mediaType == "application/json" {
+			return JSONSuccessResponse(tableBytes), nil
 		}
 	}
-
-	if !returnHTML {
-		return JSONSuccessResponse(tableBytes), nil
-	}
-	return HTMLSuccessResponse(html.FromTable(table)), nil
+	return JSONSuccessResponse(tableBytes), nil
 }
 
 func errorResponse(err error) *events.APIGatewayProxyResponse {
