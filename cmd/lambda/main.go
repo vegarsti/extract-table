@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"mime"
 	"mime/multipart"
 	"strings"
@@ -64,7 +63,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 
 	checksum := sha256.Sum256(imageBytes)
 	identifier := fmt.Sprintf("%x", checksum)
-	url := fmt.Sprintf("https://extract-table.s3.eu-west-1.amazonaws.com/%s", identifier)
+	url := "https://extract-table.s3.eu-west-1.amazonaws.com/" + identifier
 
 	sess, err := session.NewSession()
 	if err != nil {
@@ -96,7 +95,11 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		}
 
 		csvBytes := []byte(csv.FromTable(table))
-		if err := s3.Upload(sess, identifier, imageBytes, csvBytes); err != nil {
+
+		imageURL := url + ".png"
+		csvURL := url + ".csv"
+		htmlBytes := html.FromTable(table, imageURL, csvURL)
+		if err := s3.Upload(sess, identifier, imageBytes, csvBytes, htmlBytes); err != nil {
 			return errorResponse(fmt.Errorf("s3.Upload: %w", err)), nil
 		}
 	} else {
@@ -107,25 +110,24 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 
 	// Format media type responses
 	jsonBody := string(tableBytes) + "\n"
-	imageURL := url + ".png"
-	csvURL := url + ".csv"
-	htmlBody := html.FromTable(table, imageURL, csvURL) + "\n"
 	csvBody := csv.FromTable(table)
-
-	log.Println("formatted responses")
 
 	// Determine what media type to return by looking at the Accept HTTP header
 	// The header is on the form accept: text/html, application/xhtml+xml, application/xml;q=0.9
 	// where the content types are listed in preferred order.
 	acceptResponseTypes := strings.Split(req.Headers["accept"], ",")
-	for i, e := range acceptResponseTypes {
-		log.Println(i, e)
+	for _, e := range acceptResponseTypes {
 		mediaType, _, err := mime.ParseMediaType(e)
 		if err != nil {
 			return errorResponse(fmt.Errorf("unable to parse media type '%s' in Accept header: %w", e, err)), nil
 		}
 		if mediaType == "text/html" {
-			return successResponse(htmlBody, mediaType), nil
+			return &events.APIGatewayProxyResponse{
+				Headers: map[string]string{
+					"Location": url + ".html",
+				},
+				StatusCode: 301,
+			}, nil
 		}
 		if mediaType == "application/json" {
 			return successResponse(jsonBody, mediaType), nil
@@ -146,7 +148,6 @@ func errorResponse(err error) *events.APIGatewayProxyResponse {
 }
 
 func successResponse(body string, mediaType string) *events.APIGatewayProxyResponse {
-	log.Println("in successResponse")
 	return &events.APIGatewayProxyResponse{
 		Headers:    map[string]string{"Content-Type": mediaType},
 		StatusCode: 200,

@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
-func Upload(sess *session.Session, identifier string, imageData []byte, csvData []byte) error {
+func Upload(sess *session.Session, identifier string, imageData []byte, csvData []byte, htmlData []byte) error {
 	uploader := s3manager.NewUploader(sess)
 	files := []struct {
 		extension string
@@ -18,6 +18,7 @@ func Upload(sess *session.Session, identifier string, imageData []byte, csvData 
 	}{
 		{extension: ".png", data: imageData},
 		{extension: ".csv", data: csvData},
+		{extension: ".html", data: htmlData},
 	}
 	for _, file := range files {
 		filename := identifier + file.extension

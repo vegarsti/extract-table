@@ -2,7 +2,6 @@ package html
 
 import (
 	"bytes"
-	"log"
 	"text/template"
 )
 
@@ -47,7 +46,7 @@ var tmplString = `
 
 var tmpl = template.Must(template.New("table").Parse(tmplString))
 
-func FromTable(stringTable [][]string, imageURL string, csvURL string) string {
+func FromTable(stringTable [][]string, imageURL string, csvURL string) []byte {
 	table := Table{
 		ImageURL: imageURL,
 		CSVURL:   csvURL,
@@ -61,7 +60,5 @@ func FromTable(stringTable [][]string, imageURL string, csvURL string) string {
 	}
 	buf := bytes.NewBufferString("")
 	tmpl.Execute(buf, table)
-	s := buf.String()
-	log.Println("html", s)
-	return s
+	return buf.Bytes()
 }
