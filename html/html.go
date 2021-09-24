@@ -38,8 +38,9 @@ var tmplString = `
 				<td>{{.Text}}</td>{{end}}
 			</tr>{{end}}
 		</table>
-		<img src="{{.ImageURL}}">
 		<a href="{{.CSVURL}}">Download CSV.</a>
+		<br />
+		<img src="{{.ImageURL}}">
 	</body>
 </html>
 `
