@@ -13,19 +13,23 @@ import (
 func Upload(sess *session.Session, identifier string, imageData []byte, csvData []byte, htmlData []byte) error {
 	uploader := s3manager.NewUploader(sess)
 	files := []struct {
-		extension string
-		data      []byte
+		extension          string
+		data               []byte
+		contentDisposition string
+		contentType        string
 	}{
-		{extension: ".png", data: imageData},
-		{extension: ".csv", data: csvData},
-		{extension: ".html", data: htmlData},
+		{".png", imageData, fmt.Sprintf(`attachment; filename="%s.png"`, identifier), "image/png"},
+		{".csv", csvData, fmt.Sprintf(`attachment; filename="%s.csv"`, identifier), "text/csv"},
+		{".html", htmlData, "inline", "text/html"},
 	}
 	for _, file := range files {
 		filename := identifier + file.extension
 		uploadParams := &s3manager.UploadInput{
-			Bucket: aws.String("extract-table"),
-			Key:    aws.String(filename),
-			Body:   bytes.NewReader(file.data),
+			Bucket:             aws.String("extract-table"),
+			Key:                aws.String(filename),
+			Body:               bytes.NewReader(file.data),
+			ContentDisposition: &file.contentDisposition,
+			ContentType:        &file.contentType,
 		}
 		if _, err := uploader.Upload(uploadParams); err != nil {
 			return fmt.Errorf("uploader.Upload: %v", err)
