@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"crypto/md5"
 	"encoding/base64"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -15,6 +13,7 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/vegarsti/extract/csv"
 	"github.com/vegarsti/extract/dynamodb"
 	"github.com/vegarsti/extract/html"
 	"github.com/vegarsti/extract/textract"
@@ -97,33 +96,31 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		}
 	}
 
+	// Format media type responses
+	jsonBody := string(tableBytes) + "\n"
+	htmlBody := html.FromTable(table) + "\n"
+	csvBody := csv.FromTable(table)
+
 	// Determine what media type to return by looking at the Accept HTTP header
 	// The header is on the form `accept: text/html, application/xhtml+xml, application/xml;q=0.9, */*;q=0.8`,
 	// where the content types are listed in preferred order.
-	acceptResponseTypesRaw := req.Headers["accept"]
-	acceptResponseTypes := strings.Split(acceptResponseTypesRaw, ",")
+	acceptResponseTypes := strings.Split(req.Headers["accept"], ",")
 	for _, e := range acceptResponseTypes {
 		mediaType, _, err := mime.ParseMediaType(e)
 		if err != nil {
-			return errorResponse(fmt.Errorf("unable to parse media type: %w", err)), nil
+			return errorResponse(fmt.Errorf("unable to parse media type '%s' in Accept header: %w", e, err)), nil
 		}
 		if mediaType == "text/html" {
-			return HTMLSuccessResponse(html.FromTable(table)), nil
+			return successResponse(htmlBody, mediaType), nil
 		}
 		if mediaType == "application/json" {
-			return JSONSuccessResponse(tableBytes), nil
+			return successResponse(jsonBody, mediaType), nil
 		}
 		if mediaType == "text/csv" {
-			s := &bytes.Buffer{}
-			writer := csv.NewWriter(s)
-			for _, row := range table {
-				writer.Write(row)
-			}
-			writer.Flush()
-			return CSVSuccessResponse(s.String()), nil
+			return successResponse(csvBody, mediaType), nil
 		}
 	}
-	return JSONSuccessResponse(tableBytes), nil
+	return successResponse(jsonBody, mediaType), nil
 }
 
 func errorResponse(err error) *events.APIGatewayProxyResponse {
@@ -134,27 +131,11 @@ func errorResponse(err error) *events.APIGatewayProxyResponse {
 	}
 }
 
-func HTMLSuccessResponse(tableHTML string) *events.APIGatewayProxyResponse {
+func successResponse(mediaType string, body string) *events.APIGatewayProxyResponse {
 	return &events.APIGatewayProxyResponse{
-		Headers:    map[string]string{"Content-Type": "text/html"},
+		Headers:    map[string]string{"Content-Type": mediaType},
 		StatusCode: 200,
-		Body:       tableHTML + "\n",
-	}
-}
-
-func CSVSuccessResponse(tableString string) *events.APIGatewayProxyResponse {
-	return &events.APIGatewayProxyResponse{
-		Headers:    map[string]string{"Content-Type": "text/csv"},
-		StatusCode: 200,
-		Body:       tableString,
-	}
-}
-
-func JSONSuccessResponse(tableBytes []byte) *events.APIGatewayProxyResponse {
-	return &events.APIGatewayProxyResponse{
-		Headers:    map[string]string{"Content-Type": "application/json"},
-		StatusCode: 200,
-		Body:       string(tableBytes) + "\n",
+		Body:       body,
 	}
 }
 
