@@ -1,7 +1,7 @@
 package main
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -60,7 +60,8 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		imageBytes = decodedBodyBytes
 	}
 
-	checksum := md5.Sum(imageBytes)
+	checksum := sha256.Sum256(imageBytes)
+	identifier := fmt.Sprintf("%x", checksum)
 
 	sess, err := session.NewSession()
 	if err != nil {

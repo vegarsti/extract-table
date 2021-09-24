@@ -1,7 +1,7 @@
 package main
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -34,7 +34,8 @@ func main() {
 	}
 
 	// Check if table is stored
-	checksum := md5.Sum(b)
+	checksum := sha256.Sum256(b)
+
 	storedBytes, err := dynamodb.GetTable(mySession, checksum[:])
 	if err != nil {
 		die(err)
