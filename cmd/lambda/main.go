@@ -32,6 +32,8 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	if err != nil {
 		return errorResponse(fmt.Errorf("failed to parse media type': %w", err)), nil
 	}
+
+	var imageBytes []byte
 	if mediaType == "multipart/form-data" {
 		decodedBody := string(decodedBodyBytes)
 		reader := multipart.NewReader(strings.NewReader(decodedBody), params["boundary"])
@@ -52,7 +54,45 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		if err != nil {
 			return errorResponse(fmt.Errorf("failed to read file': %w", err)), nil
 		}
-		decodedBodyBytes = data
+		imageBytes = data
+	} else {
+		imageBytes = decodedBodyBytes
+	}
+
+	checksum := md5.Sum(imageBytes)
+
+	sess, err := session.NewSession()
+	if err != nil {
+		return errorResponse(fmt.Errorf("unable to create session: %w", err)), nil
+	}
+
+	var tableBytes []byte
+	var table [][]string
+
+	tableBytes, err = dynamodb.GetTable(sess, checksum[:])
+	if err != nil {
+		return errorResponse(fmt.Errorf("dynamodb.GetTable: %w", err)), nil
+	}
+	if tableBytes == nil {
+		output, err := textract.Extract(sess, imageBytes)
+		if err != nil {
+			return errorResponse(fmt.Errorf("failed to extract: %w", err)), nil
+		}
+		table, err := textract.ToTableFromDetectedTable(output)
+		if err != nil {
+			return errorResponse(fmt.Errorf("failed to convert to table: %w", err)), nil
+		}
+		tableBytes, err = json.MarshalIndent(table, "", "  ")
+		if err != nil {
+			return errorResponse(fmt.Errorf("failed to convert to json: %w", err)), nil
+		}
+		if err := dynamodb.PutTable(sess, checksum[:], tableBytes); err != nil {
+			return errorResponse(fmt.Errorf("dynamodb.PutTable: %w", err)), nil
+		}
+	} else {
+		if err := json.Unmarshal(tableBytes, &table); err != nil {
+			return errorResponse(fmt.Errorf("failed to convert from json: %w", err)), nil
+		}
 	}
 
 	// Determine whether to return HTML or JSON by looking at the Accept HTTP header
@@ -78,50 +118,10 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		}
 	}
 
-	sess, err := session.NewSession()
-	if err != nil {
-		return errorResponse(fmt.Errorf("unable to create session: %w", err)), nil
-	}
-
-	// Check if table is stored
-	checksum := md5.Sum(decodedBodyBytes)
-	storedBytes, err := dynamodb.GetTable(sess, checksum[:])
-	if err != nil {
-		return errorResponse(fmt.Errorf("dynamodb.GetTable: %w", err)), nil
-	}
-	if storedBytes != nil {
-		if !returnHTML {
-			return JSONSuccessResponse(storedBytes), nil
-		}
-		var table [][]string
-		if err := json.Unmarshal(storedBytes, &table); err != nil {
-			return errorResponse(fmt.Errorf("failed to convert from json: %w", err)), nil
-		}
-		tableHTML := html.FromTable(table)
-		return HTMLSuccessResponse(tableHTML), nil
-	}
-
-	output, err := textract.Extract(sess, decodedBodyBytes)
-	if err != nil {
-		return errorResponse(fmt.Errorf("failed to extract: %w", err)), nil
-	}
-	table, err := textract.ToTableFromDetectedTable(output)
-	if err != nil {
-		return errorResponse(fmt.Errorf("failed to convert to table: %w", err)), nil
-	}
-
-	tableBytes, err := json.MarshalIndent(table, "", "  ")
-	if err != nil {
-		return errorResponse(fmt.Errorf("failed to convert to json: %w", err)), nil
-	}
-	if err := dynamodb.PutTable(sess, checksum[:], tableBytes); err != nil {
-		return errorResponse(fmt.Errorf("dynamodb.PutTable: %w", err)), nil
-	}
 	if !returnHTML {
 		return JSONSuccessResponse(tableBytes), nil
 	}
-	tableHTML := html.FromTable(table)
-	return HTMLSuccessResponse(tableHTML), nil
+	return HTMLSuccessResponse(html.FromTable(table)), nil
 }
 
 func errorResponse(err error) *events.APIGatewayProxyResponse {
