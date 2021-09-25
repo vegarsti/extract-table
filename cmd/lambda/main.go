@@ -63,7 +63,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 
 	checksum := sha256.Sum256(imageBytes)
 	identifier := fmt.Sprintf("%x", checksum)
-	url := "https://extract-table.s3.eu-west-1.amazonaws.com/" + identifier
+	url := "https://results.extract-table.com/" + identifier
 
 	sess, err := session.NewSession()
 	if err != nil {
@@ -96,7 +96,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 
 		csvBytes := []byte(csv.FromTable(table))
 
-		imageURL := url + ".png"
+		imageURL := url + ".png" // what about jpg?
 		csvURL := url + ".csv"
 		htmlBytes := html.FromTable(table, imageURL, csvURL)
 		if err := s3.Upload(sess, identifier, imageBytes, csvBytes, htmlBytes); err != nil {

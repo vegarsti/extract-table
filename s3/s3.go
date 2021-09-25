@@ -3,7 +3,6 @@ package s3
 import (
 	"bytes"
 	"fmt"
-	"log"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -25,7 +24,7 @@ func Upload(sess *session.Session, identifier string, imageData []byte, csvData 
 	for _, file := range files {
 		filename := identifier + file.extension
 		uploadParams := &s3manager.UploadInput{
-			Bucket:             aws.String("extract-table"),
+			Bucket:             aws.String("results.extract-table.com"),
 			Key:                aws.String(filename),
 			Body:               bytes.NewReader(file.data),
 			ContentDisposition: &file.contentDisposition,
@@ -35,6 +34,5 @@ func Upload(sess *session.Session, identifier string, imageData []byte, csvData 
 			return fmt.Errorf("uploader.Upload: %v", err)
 		}
 	}
-	log.Println("uploaded files")
 	return nil
 }
