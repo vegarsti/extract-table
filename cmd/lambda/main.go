@@ -30,82 +30,20 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return errorResponse(fmt.Errorf("unable to convert base64 to bytes: %w", err)), nil
 	}
 
-	mediaType, params, err := mime.ParseMediaType(req.Headers["content-type"])
+	imageBytes, err := getImageBytes(decodedBodyBytes, req.Headers["content-type"])
 	if err != nil {
-		return errorResponse(fmt.Errorf("failed to parse media type': %w", err)), nil
+		return errorResponse(err), nil
 	}
 
-	var imageBytes []byte
-	if mediaType == "multipart/form-data" {
-		decodedBody := string(decodedBodyBytes)
-		reader := multipart.NewReader(strings.NewReader(decodedBody), params["boundary"])
-		tenMBInBytes := 10000000
-		form, err := reader.ReadForm(int64(tenMBInBytes))
-		if err != nil {
-			return errorResponse(fmt.Errorf("failed to read form': %w", err)), nil
-		}
-		file, ok := form.File["image"]
-		if !ok {
-			return errorResponse(fmt.Errorf("no file in form field 'image'")), nil
-		}
-		f, err := file[0].Open()
-		if err != nil {
-			return errorResponse(fmt.Errorf("failed to open file': %w", err)), nil
-		}
-		data, err := ioutil.ReadAll(f)
-		if err != nil {
-			return errorResponse(fmt.Errorf("failed to read file': %w", err)), nil
-		}
-		imageBytes = data
-	} else {
-		imageBytes = decodedBodyBytes
-	}
-
-	checksum := sha256.Sum256(imageBytes)
-	identifier := fmt.Sprintf("%x", checksum)
-	url := "https://results.extract-table.com/" + identifier
-
-	sess, err := session.NewSession()
+	// get table, from cache if possible
+	checksum := fmt.Sprintf("%x", sha256.Sum256(imageBytes))
+	table, err := getTable(imageBytes, checksum)
 	if err != nil {
-		return errorResponse(fmt.Errorf("unable to create session: %w", err)), nil
+		return errorResponse(err), nil
 	}
-
-	var tableBytes []byte
-	var table [][]string
-
-	tableBytes, err = dynamodb.GetTable(sess, checksum[:])
+	tableBytes, err := json.MarshalIndent(table, "", "  ")
 	if err != nil {
-		return errorResponse(fmt.Errorf("dynamodb.GetTable: %w", err)), nil
-	}
-	if tableBytes == nil {
-		output, err := textract.Extract(sess, imageBytes)
-		if err != nil {
-			return errorResponse(fmt.Errorf("failed to extract: %w", err)), nil
-		}
-		table, err := textract.ToTableFromDetectedTable(output)
-		if err != nil {
-			return errorResponse(fmt.Errorf("failed to convert to table: %w", err)), nil
-		}
-		tableBytes, err = json.MarshalIndent(table, "", "  ")
-		if err != nil {
-			return errorResponse(fmt.Errorf("failed to convert to json: %w", err)), nil
-		}
-		if err := dynamodb.PutTable(sess, checksum[:], tableBytes); err != nil {
-			return errorResponse(fmt.Errorf("dynamodb.PutTable: %w", err)), nil
-		}
-
-		csvBytes := []byte(csv.FromTable(table))
-
-		imageURL := url + ".png" // what about jpg?
-		csvURL := url + ".csv"
-		htmlBytes := html.FromTable(table, imageURL, csvURL)
-		if err := s3.Upload(sess, identifier, imageBytes, csvBytes, htmlBytes); err != nil {
-			return errorResponse(fmt.Errorf("s3.Upload: %w", err)), nil
-		}
-	} else {
-		if err := json.Unmarshal(tableBytes, &table); err != nil {
-			return errorResponse(fmt.Errorf("failed to convert from json: %w", err)), nil
-		}
+		return nil, fmt.Errorf("failed to convert to json: %w", err)
 	}
 
 	// Format media type responses
@@ -124,7 +62,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		if mediaType == "text/html" {
 			return &events.APIGatewayProxyResponse{
 				Headers: map[string]string{
-					"Location": url,
+					"Location": "https://results.extract-table.com/" + checksum,
 				},
 				StatusCode: 301,
 			}, nil
@@ -157,4 +95,81 @@ func successResponse(body string, mediaType string) *events.APIGatewayProxyRespo
 
 func main() {
 	lambda.Start(HandleRequest)
+}
+
+func getTable(imageBytes []byte, checksum string) ([][]string, error) {
+	sess, err := session.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("unable to create session: %w", err)
+	}
+
+	var tableBytes []byte
+	var table [][]string
+
+	tableBytes, err = dynamodb.GetTable(sess, checksum)
+	if err != nil {
+		return nil, fmt.Errorf("dynamodb.GetTable: %w", err)
+	}
+	if tableBytes == nil {
+		output, err := textract.Extract(sess, imageBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract: %w", err)
+		}
+		table, err := textract.ToTableFromDetectedTable(output)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert to table: %w", err)
+		}
+		tableBytes, err = json.MarshalIndent(table, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert to json: %w", err)
+		}
+		if err := dynamodb.PutTable(sess, checksum, tableBytes); err != nil {
+			return nil, fmt.Errorf("dynamodb.PutTable: %w", err)
+		}
+
+		csvBytes := []byte(csv.FromTable(table))
+
+		url := "https://results.extract-table.com/" + checksum
+		imageURL := url + ".png" // what about jpg?
+		csvURL := url + ".csv"
+		htmlBytes := html.FromTable(table, imageURL, csvURL)
+		if err := s3.Upload(sess, checksum, imageBytes, csvBytes, htmlBytes); err != nil {
+			return nil, fmt.Errorf("s3.Upload: %w", err)
+		}
+	}
+	if err := json.Unmarshal(tableBytes, &table); err != nil {
+		return nil, fmt.Errorf("failed to convert from json: %w", err)
+	}
+	return table, nil
+}
+
+func getImageBytes(decodedBodyBytes []byte, contentTypeHeader string) ([]byte, error) {
+	mediaType, params, err := mime.ParseMediaType(contentTypeHeader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse media type': %w", err)
+	}
+
+	if mediaType != "multipart/form-data" {
+		return decodedBodyBytes, nil
+	}
+	decodedBody := string(decodedBodyBytes)
+	reader := multipart.NewReader(strings.NewReader(decodedBody), params["boundary"])
+	tenMBInBytes := 10000000
+	form, err := reader.ReadForm(int64(tenMBInBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read form': %w", err)
+	}
+	file, ok := form.File["image"]
+	if !ok {
+		return nil, fmt.Errorf("no file in form field 'image'")
+	}
+	f, err := file[0].Open()
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file': %w", err)
+	}
+	data, err := ioutil.ReadAll(f)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file': %w", err)
+	}
+	return data, nil
 }

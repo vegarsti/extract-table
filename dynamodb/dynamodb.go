@@ -15,7 +15,7 @@ func CreateTable(sess *session.Session) error {
 		AttributeDefinitions: []*dynamodb.AttributeDefinition{
 			{
 				AttributeName: aws.String("Checksum"),
-				AttributeType: aws.String("B"),
+				AttributeType: aws.String("S"),
 			},
 		},
 		KeySchema: []*dynamodb.KeySchemaElement{
@@ -34,11 +34,11 @@ func CreateTable(sess *session.Session) error {
 	return nil
 }
 
-func PutTable(sess *session.Session, checksum []byte, table []byte) error {
+func PutTable(sess *session.Session, checksum string, table []byte) error {
 	svc := dynamodb.New(sess)
 	putInput := &dynamodb.PutItemInput{
 		Item: map[string]*dynamodb.AttributeValue{
-			"Checksum":  {B: checksum},
+			"Checksum":  {S: &checksum},
 			"JSONTable": {B: table},
 		},
 		TableName: aws.String("Tables"),
@@ -49,12 +49,12 @@ func PutTable(sess *session.Session, checksum []byte, table []byte) error {
 	return nil
 }
 
-func GetTable(sess *session.Session, checksum []byte) ([]byte, error) {
+func GetTable(sess *session.Session, checksum string) ([]byte, error) {
 	svc := dynamodb.New(sess)
 	projection := "JSONTable"
 	putInput := &dynamodb.GetItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
-			"Checksum": {B: checksum},
+			"Checksum": {S: &checksum},
 		},
 		ProjectionExpression: &projection,
 		TableName:            aws.String("Tables"),

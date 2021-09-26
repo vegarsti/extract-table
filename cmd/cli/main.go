@@ -28,15 +28,14 @@ func main() {
 	if err != nil {
 		die(err)
 	}
-	b, err := ioutil.ReadFile(filename)
+	imageBytes, err := ioutil.ReadFile(filename)
 	if err != nil {
 		die(err)
 	}
 
 	// Check if table is stored
-	checksum := sha256.Sum256(b)
-
-	storedBytes, err := dynamodb.GetTable(mySession, checksum[:])
+	checksum := fmt.Sprintf("%x", sha256.Sum256(imageBytes))
+	storedBytes, err := dynamodb.GetTable(mySession, checksum)
 	if err != nil {
 		die(err)
 	}
@@ -47,7 +46,7 @@ func main() {
 		return
 	}
 
-	output, err := textract.Extract(mySession, b)
+	output, err := textract.Extract(mySession, imageBytes)
 	if err != nil {
 		die(err)
 	}
