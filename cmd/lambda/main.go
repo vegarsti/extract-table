@@ -124,7 +124,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		if mediaType == "text/html" {
 			return &events.APIGatewayProxyResponse{
 				Headers: map[string]string{
-					"Location": url + ".html",
+					"Location": url,
 				},
 				StatusCode: 301,
 			}, nil

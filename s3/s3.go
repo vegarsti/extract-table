@@ -19,7 +19,7 @@ func Upload(sess *session.Session, identifier string, imageData []byte, csvData 
 	}{
 		{".png", imageData, fmt.Sprintf(`attachment; filename="%s.png"`, identifier), "image/png"},
 		{".csv", csvData, fmt.Sprintf(`attachment; filename="%s.csv"`, identifier), "text/csv"},
-		{".html", htmlData, "inline", "text/html"},
+		{"", htmlData, "inline", "text/html"},
 	}
 	for _, file := range files {
 		filename := identifier + file.extension
