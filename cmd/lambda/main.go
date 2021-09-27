@@ -17,6 +17,7 @@ import (
 	"github.com/vegarsti/extract/html"
 	"github.com/vegarsti/extract/s3"
 	"github.com/vegarsti/extract/textract"
+	"golang.org/x/sync/errgroup"
 )
 
 func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
@@ -126,17 +127,33 @@ func getTable(imageBytes []byte, checksum string) ([][]string, error) {
 	csvURL := url + ".csv"
 	htmlBytes := html.FromTable(table, imageURL, csvURL)
 
-	if err := s3.UploadPNG(checksum, imageBytes); err != nil {
+	g := new(errgroup.Group)
+	g.Go(func() error {
+		if err := s3.UploadPNG(checksum, imageBytes); err != nil {
+			return err
+		}
+		return nil
+	})
+	g.Go(func() error {
+		if err := s3.UploadCSV(checksum, csvBytes); err != nil {
+			return err
+		}
+		return nil
+	})
+	g.Go(func() error {
+		if err := s3.UploadHTML(checksum, htmlBytes); err != nil {
+			return err
+		}
+		return nil
+	})
+	g.Go(func() error {
+		if err := dynamodb.PutTable(checksum, tableBytes); err != nil {
+			return fmt.Errorf("dynamodb.PutTable: %w", err)
+		}
+		return nil
+	})
+	if err := g.Wait(); err != nil {
 		return nil, err
-	}
-	if err := s3.UploadCSV(checksum, csvBytes); err != nil {
-		return nil, err
-	}
-	if err := s3.UploadHTML(checksum, htmlBytes); err != nil {
-		return nil, err
-	}
-	if err := dynamodb.PutTable(checksum, tableBytes); err != nil {
-		return nil, fmt.Errorf("dynamodb.PutTable: %w", err)
 	}
 	return table, nil
 }
