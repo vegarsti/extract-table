@@ -11,7 +11,11 @@ import (
 	"github.com/vegarsti/extract"
 )
 
-func Extract(sess *session.Session, bs []byte) (*textract.AnalyzeDocumentOutput, error) {
+func Extract(bs []byte) (*textract.AnalyzeDocumentOutput, error) {
+	sess, err := session.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("unable to create session: %w", err)
+	}
 	svc := textract.New(sess)
 	tables := "TABLES"
 	input := &textract.AnalyzeDocumentInput{

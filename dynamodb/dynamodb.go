@@ -34,7 +34,11 @@ func CreateTable(sess *session.Session) error {
 	return nil
 }
 
-func PutTable(sess *session.Session, checksum string, table []byte) error {
+func PutTable(checksum string, table []byte) error {
+	sess, err := session.NewSession()
+	if err != nil {
+		return fmt.Errorf("unable to create session: %w", err)
+	}
 	svc := dynamodb.New(sess)
 	putInput := &dynamodb.PutItemInput{
 		Item: map[string]*dynamodb.AttributeValue{
@@ -49,7 +53,11 @@ func PutTable(sess *session.Session, checksum string, table []byte) error {
 	return nil
 }
 
-func GetTable(sess *session.Session, checksum string) ([]byte, error) {
+func GetTable(checksum string) ([]byte, error) {
+	sess, err := session.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("unable to create session: %w", err)
+	}
 	svc := dynamodb.New(sess)
 	projection := "JSONTable"
 	putInput := &dynamodb.GetItemInput{

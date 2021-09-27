@@ -9,7 +9,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
-func UploadPNG(sess *session.Session, identifier string, data []byte) error {
+func UploadPNG(identifier string, data []byte) error {
+	sess, err := session.NewSession()
+	if err != nil {
+		return fmt.Errorf("unable to create session: %w", err)
+	}
 	uploader := s3manager.NewUploader(sess)
 	contentDisposition := fmt.Sprintf(`attachment; filename="%s.png"`, identifier)
 	contentType := "image/png"
@@ -26,7 +30,11 @@ func UploadPNG(sess *session.Session, identifier string, data []byte) error {
 	return nil
 }
 
-func UploadCSV(sess *session.Session, identifier string, data []byte) error {
+func UploadCSV(identifier string, data []byte) error {
+	sess, err := session.NewSession()
+	if err != nil {
+		return fmt.Errorf("unable to create session: %w", err)
+	}
 	uploader := s3manager.NewUploader(sess)
 	contentType := "text/csv"
 	contentDisposition := fmt.Sprintf(`attachment; filename="%s.csv"`, identifier)
@@ -43,7 +51,11 @@ func UploadCSV(sess *session.Session, identifier string, data []byte) error {
 	return nil
 }
 
-func UploadHTML(sess *session.Session, identifier string, data []byte) error {
+func UploadHTML(identifier string, data []byte) error {
+	sess, err := session.NewSession()
+	if err != nil {
+		return fmt.Errorf("unable to create session: %w", err)
+	}
 	uploader := s3manager.NewUploader(sess)
 	contentType := "text/html"
 	contentDisposition := "inline"

@@ -8,7 +8,6 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/vegarsti/extract/dynamodb"
 	"github.com/vegarsti/extract/textract"
 )
@@ -24,10 +23,6 @@ func main() {
 		die(err)
 	}
 	filename := os.Args[1]
-	mySession, err := session.NewSession()
-	if err != nil {
-		die(err)
-	}
 	imageBytes, err := ioutil.ReadFile(filename)
 	if err != nil {
 		die(err)
@@ -35,7 +30,7 @@ func main() {
 
 	// Check if table is stored
 	checksum := fmt.Sprintf("%x", sha256.Sum256(imageBytes))
-	storedBytes, err := dynamodb.GetTable(mySession, checksum)
+	storedBytes, err := dynamodb.GetTable(checksum)
 	if err != nil {
 		die(err)
 	}
@@ -46,7 +41,7 @@ func main() {
 		return
 	}
 
-	output, err := textract.Extract(mySession, imageBytes)
+	output, err := textract.Extract(imageBytes)
 	if err != nil {
 		die(err)
 	}
@@ -61,7 +56,7 @@ func main() {
 	if err != nil {
 		die(err)
 	}
-	if err := dynamodb.PutTable(mySession, checksum[:], tableJSON); err != nil {
+	if err := dynamodb.PutTable(checksum[:], tableJSON); err != nil {
 		die(err)
 	}
 }

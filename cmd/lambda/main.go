@@ -12,7 +12,6 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/vegarsti/extract/csv"
 	"github.com/vegarsti/extract/dynamodb"
 	"github.com/vegarsti/extract/html"
@@ -99,30 +98,19 @@ func main() {
 }
 
 func getTable(imageBytes []byte, checksum string) ([][]string, error) {
-	sess, err := session.NewSession()
-	if err != nil {
-		return nil, fmt.Errorf("unable to create session: %w", err)
-	}
-
-	var tableBytes []byte
-	var table [][]string
-
-	tableBytes, err = dynamodb.GetTable(sess, checksum)
+	tableBytes, err := dynamodb.GetTable(checksum)
 	if err != nil {
 		return nil, fmt.Errorf("dynamodb.GetTable: %w", err)
 	}
+	var table [][]string
 	if tableBytes == nil {
-		output, err := textract.Extract(sess, imageBytes)
+		output, err := textract.Extract(imageBytes)
 		if err != nil {
 			return nil, fmt.Errorf("failed to extract: %w", err)
 		}
 		table, err := textract.ToTableFromDetectedTable(output)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert to table: %w", err)
-		}
-		tableBytes, err = json.MarshalIndent(table, "", "  ")
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert to json: %w", err)
 		}
 
 		csvBytes := []byte(csv.FromTable(table))
@@ -134,16 +122,16 @@ func getTable(imageBytes []byte, checksum string) ([][]string, error) {
 		// Send requests concurrently
 		g := new(errgroup.Group)
 		g.Go(func() error {
-			return s3.UploadPNG(sess, checksum, imageBytes)
+			return s3.UploadPNG(checksum, imageBytes)
 		})
 		g.Go(func() error {
-			return s3.UploadCSV(sess, checksum, csvBytes)
+			return s3.UploadCSV(checksum, csvBytes)
 		})
 		g.Go(func() error {
-			return s3.UploadHTML(sess, checksum, htmlBytes)
+			return s3.UploadHTML(checksum, htmlBytes)
 		})
 		g.Go(func() error {
-			if err := dynamodb.PutTable(sess, checksum, tableBytes); err != nil {
+			if err := dynamodb.PutTable(checksum, tableBytes); err != nil {
 				return fmt.Errorf("dynamodb.PutTable: %w", err)
 			}
 			return nil
