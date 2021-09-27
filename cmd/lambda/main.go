@@ -101,42 +101,42 @@ func getTable(imageBytes []byte, checksum string) ([][]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dynamodb.GetTable: %w", err)
 	}
-	var table [][]string
-	if tableBytes == nil {
-		output, err := textract.Extract(imageBytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to extract: %w", err)
-		}
-		table, err := textract.ToTableFromDetectedTable(output)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert to table: %w", err)
-		}
-		tableBytes, err := json.MarshalIndent(table, "", "  ")
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert table to json: %w", err)
-		}
-
-		csvBytes := []byte(csv.FromTable(table))
-		url := "https://results.extract-table.com/" + checksum
-		imageURL := url + ".png" // what about jpg?
-		csvURL := url + ".csv"
-		htmlBytes := html.FromTable(table, imageURL, csvURL)
-
-		if err := s3.UploadPNG(checksum, imageBytes); err != nil {
-			return nil, err
-		}
-		if err := s3.UploadCSV(checksum, csvBytes); err != nil {
-			return nil, err
-		}
-		if err := s3.UploadHTML(checksum, htmlBytes); err != nil {
-			return nil, err
-		}
-		if err := dynamodb.PutTable(checksum, tableBytes); err != nil {
-			return nil, fmt.Errorf("dynamodb.PutTable: %w", err)
+	if tableBytes != nil {
+		var table [][]string
+		if err := json.Unmarshal(tableBytes, &table); err != nil {
+			return nil, fmt.Errorf("failed to convert from json: %w", err)
 		}
 	}
-	if err := json.Unmarshal(tableBytes, &table); err != nil {
-		return nil, fmt.Errorf("failed to convert from json: %w", err)
+	output, err := textract.Extract(imageBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract: %w", err)
+	}
+	table, err := textract.ToTableFromDetectedTable(output)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert to table: %w", err)
+	}
+	tableBytes, err = json.MarshalIndent(table, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert table to json: %w", err)
+	}
+
+	csvBytes := []byte(csv.FromTable(table))
+	url := "https://results.extract-table.com/" + checksum
+	imageURL := url + ".png" // what about jpg?
+	csvURL := url + ".csv"
+	htmlBytes := html.FromTable(table, imageURL, csvURL)
+
+	if err := s3.UploadPNG(checksum, imageBytes); err != nil {
+		return nil, err
+	}
+	if err := s3.UploadCSV(checksum, csvBytes); err != nil {
+		return nil, err
+	}
+	if err := s3.UploadHTML(checksum, htmlBytes); err != nil {
+		return nil, err
+	}
+	if err := dynamodb.PutTable(checksum, tableBytes); err != nil {
+		return nil, fmt.Errorf("dynamodb.PutTable: %w", err)
 	}
 	return table, nil
 }
