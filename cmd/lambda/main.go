@@ -111,6 +111,10 @@ func getTable(imageBytes []byte, checksum string) ([][]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert to table: %w", err)
 		}
+		tableBytes, err := json.MarshalIndent(table, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert table to json: %w", err)
+		}
 
 		csvBytes := []byte(csv.FromTable(table))
 		url := "https://results.extract-table.com/" + checksum
