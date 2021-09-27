@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"mime"
 	"mime/multipart"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -98,20 +100,25 @@ func main() {
 }
 
 func getTable(imageBytes []byte, checksum string) ([][]string, error) {
+	startGet := time.Now()
 	tableBytes, err := dynamodb.GetTable(checksum)
 	if err != nil {
 		return nil, fmt.Errorf("dynamodb.GetTable: %w", err)
 	}
+	log.Printf("dynamodb get: %s", time.Since(startGet).String())
 	if tableBytes != nil {
 		var table [][]string
 		if err := json.Unmarshal(tableBytes, &table); err != nil {
 			return nil, fmt.Errorf("failed to convert from json: %w", err)
 		}
+		return table, nil
 	}
+	startOCR := time.Now()
 	output, err := textract.Extract(imageBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract: %w", err)
 	}
+	log.Printf("textract: %s", time.Since(startOCR).String())
 	table, err := textract.ToTableFromDetectedTable(output)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert to table: %w", err)
@@ -129,32 +136,42 @@ func getTable(imageBytes []byte, checksum string) ([][]string, error) {
 
 	g := new(errgroup.Group)
 	g.Go(func() error {
+		startUpload := time.Now()
 		if err := s3.UploadPNG(checksum, imageBytes); err != nil {
 			return err
 		}
+		log.Printf("s3 png %s", time.Since(startUpload).String())
 		return nil
 	})
 	g.Go(func() error {
+		startUpload := time.Now()
 		if err := s3.UploadCSV(checksum, csvBytes); err != nil {
 			return err
 		}
+		log.Printf("s3 csv %s", time.Since(startUpload).String())
 		return nil
 	})
 	g.Go(func() error {
+		startUpload := time.Now()
 		if err := s3.UploadHTML(checksum, htmlBytes); err != nil {
 			return err
 		}
+		log.Printf("s3 html %s", time.Since(startUpload).String())
 		return nil
 	})
 	g.Go(func() error {
+		startPut := time.Now()
 		if err := dynamodb.PutTable(checksum, tableBytes); err != nil {
 			return fmt.Errorf("dynamodb.PutTable: %w", err)
 		}
+		log.Printf("dynamodb put: %s", time.Since(startPut).String())
 		return nil
 	})
+	startErrgroup := time.Now()
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
+	log.Printf("errgroup: %s", time.Since(startErrgroup).String())
 	return table, nil
 }
 
