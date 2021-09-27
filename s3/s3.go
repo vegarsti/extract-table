@@ -9,30 +9,53 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
-func Upload(sess *session.Session, identifier string, imageData []byte, csvData []byte, htmlData []byte) error {
+func UploadPNG(sess *session.Session, identifier string, data []byte) error {
 	uploader := s3manager.NewUploader(sess)
-	files := []struct {
-		extension          string
-		data               []byte
-		contentDisposition string
-		contentType        string
-	}{
-		{".png", imageData, fmt.Sprintf(`attachment; filename="%s.png"`, identifier), "image/png"},
-		{".csv", csvData, fmt.Sprintf(`attachment; filename="%s.csv"`, identifier), "text/csv"},
-		{"", htmlData, "inline", "text/html"},
+	contentDisposition := fmt.Sprintf(`attachment; filename="%s.png"`, identifier)
+	contentType := "image/png"
+	uploadParams := &s3manager.UploadInput{
+		Bucket:             aws.String("results.extract-table.com"),
+		Key:                aws.String(identifier + ".png"),
+		Body:               bytes.NewReader(data),
+		ContentDisposition: &contentDisposition,
+		ContentType:        &contentType,
 	}
-	for _, file := range files {
-		filename := identifier + file.extension
-		uploadParams := &s3manager.UploadInput{
-			Bucket:             aws.String("results.extract-table.com"),
-			Key:                aws.String(filename),
-			Body:               bytes.NewReader(file.data),
-			ContentDisposition: &file.contentDisposition,
-			ContentType:        &file.contentType,
-		}
-		if _, err := uploader.Upload(uploadParams); err != nil {
-			return fmt.Errorf("uploader.Upload: %v", err)
-		}
+	if _, err := uploader.Upload(uploadParams); err != nil {
+		return fmt.Errorf("uploadPNG: %v", err)
+	}
+	return nil
+}
+
+func UploadCSV(sess *session.Session, identifier string, data []byte) error {
+	uploader := s3manager.NewUploader(sess)
+	contentType := "text/csv"
+	contentDisposition := fmt.Sprintf(`attachment; filename="%s.csv"`, identifier)
+	uploadParams := &s3manager.UploadInput{
+		Bucket:             aws.String("results.extract-table.com"),
+		Key:                aws.String(identifier + ".csv"),
+		Body:               bytes.NewReader(data),
+		ContentDisposition: &contentDisposition,
+		ContentType:        &contentType,
+	}
+	if _, err := uploader.Upload(uploadParams); err != nil {
+		return fmt.Errorf("uploadCSV: %v", err)
+	}
+	return nil
+}
+
+func UploadHTML(sess *session.Session, identifier string, data []byte) error {
+	uploader := s3manager.NewUploader(sess)
+	contentType := "text/html"
+	contentDisposition := "inline"
+	uploadParams := &s3manager.UploadInput{
+		Bucket:             aws.String("results.extract-table.com"),
+		Key:                aws.String(identifier),
+		Body:               bytes.NewReader(data),
+		ContentDisposition: &contentDisposition,
+		ContentType:        &contentType,
+	}
+	if _, err := uploader.Upload(uploadParams); err != nil {
+		return fmt.Errorf("uploadHTML: %v", err)
 	}
 	return nil
 }
