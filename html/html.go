@@ -32,12 +32,12 @@ var tmplString = `
 		</style>
 	</head>
 	<body>
+		<a href="{{.CSVURL}}">Download CSV.</a>
 		<table>{{range .Rows}}
 			<tr>{{range .Cells}}
 				<td>{{.Text}}</td>{{end}}
 			</tr>{{end}}
 		</table>
-		<a href="{{.CSVURL}}">Download CSV.</a>
 		<br />
 		<img src="{{.ImageURL}}">
 	</body>
