@@ -37,9 +37,9 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return errorResponse(err), nil
 	}
 
-	// get table, from cache if possible
-	checksum := fmt.Sprintf("%x", sha256.Sum256(imageBytes))
-	table, err := getTable(imageBytes, checksum)
+	// get table, from cache if possible, if not from textract
+	identifier := fmt.Sprintf("%x", sha256.Sum256(imageBytes))
+	table, err := getTable(imageBytes, identifier)
 	if err != nil {
 		return errorResponse(err), nil
 	}
@@ -48,35 +48,25 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return nil, fmt.Errorf("failed to convert to json: %w", err)
 	}
 
-	// Format media type responses
-	jsonBody := string(tableBytes) + "\n"
-	csvBody := csv.FromTable(table)
-
-	// Determine what media type to return by looking at the Accept HTTP header
-	// The header is on the form accept: text/html, application/xhtml+xml, application/xml;q=0.9
-	// where the content types are listed in preferred order.
-	acceptResponseTypes := strings.Split(req.Headers["accept"], ",")
-	for _, e := range acceptResponseTypes {
-		mediaType, _, err := mime.ParseMediaType(e)
-		if err != nil {
-			return errorResponse(fmt.Errorf("unable to parse media type '%s' in Accept header: %w", e, err)), nil
-		}
-		if mediaType == "text/html" {
-			return &events.APIGatewayProxyResponse{
-				Headers: map[string]string{
-					"Location": "https://results.extract-table.com/" + checksum,
-				},
-				StatusCode: 301,
-			}, nil
-		}
-		if mediaType == "application/json" {
-			return successResponse(jsonBody, mediaType), nil
-		}
-		if mediaType == "text/csv" {
-			return successResponse(csvBody, mediaType), nil
-		}
+	responseMediaType, err := determineResponseMediaType(req.Headers["accept"])
+	if err != nil {
+		return errorResponse(err), nil
 	}
-	return successResponse(jsonBody, "application/json"), nil
+	switch responseMediaType {
+	case "text/html":
+		return &events.APIGatewayProxyResponse{
+			Headers: map[string]string{
+				"Location": "https://results.extract-table.com/" + identifier,
+			},
+			StatusCode: 301,
+		}, nil
+	case "text/csv":
+		csvBody := csv.FromTable(table)
+		return successResponse(csvBody, "text/csv"), nil
+	default:
+		jsonBody := string(tableBytes) + "\n"
+		return successResponse(jsonBody, "application/json"), nil
+	}
 }
 
 func errorResponse(err error) *events.APIGatewayProxyResponse {
@@ -99,6 +89,7 @@ func main() {
 	lambda.Start(HandleRequest)
 }
 
+// getTable either cached from DynamoDB if it has been processed before, or perform OCR with Textract
 func getTable(imageBytes []byte, checksum string) ([][]string, error) {
 	startGet := time.Now()
 	tableBytes, err := dynamodb.GetTable(checksum)
@@ -175,6 +166,8 @@ func getTable(imageBytes []byte, checksum string) ([][]string, error) {
 	return table, nil
 }
 
+// getImageBytes from the decoded body from the HTTP request. The contentTypeHeader is needed to determine how to get the data,
+// in particular if the content type is "multipart/form-data", then we need to do some more work to get the image.
 func getImageBytes(decodedBodyBytes []byte, contentTypeHeader string) ([]byte, error) {
 	mediaType, params, err := mime.ParseMediaType(contentTypeHeader)
 	if err != nil {
@@ -204,4 +197,27 @@ func getImageBytes(decodedBodyBytes []byte, contentTypeHeader string) ([]byte, e
 		return nil, fmt.Errorf("failed to read file': %w", err)
 	}
 	return data, nil
+}
+
+// determineResponseMediaType determines what media type to return by looking at the Accept HTTP header
+// The header is on the form accept: text/html, application/xhtml+xml, application/xml;q=0.9
+// where the content types are listed in preferred order.
+func determineResponseMediaType(acceptResponseHeader string) (string, error) {
+	acceptResponseTypes := strings.Split(acceptResponseHeader, ",")
+	for _, e := range acceptResponseTypes {
+		mediaType, _, err := mime.ParseMediaType(e)
+		if err != nil {
+			return "", fmt.Errorf("unable to parse media type '%s' in Accept header: %w", e, err)
+		}
+		if mediaType == "text/html" {
+			return mediaType, nil
+		}
+		if mediaType == "application/json" {
+			return mediaType, nil
+		}
+		if mediaType == "text/csv" {
+			return mediaType, nil
+		}
+	}
+	return "application/json", nil
 }
