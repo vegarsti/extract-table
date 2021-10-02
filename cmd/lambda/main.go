@@ -177,9 +177,6 @@ func getImageBytes(decodedBodyBytes []byte, contentTypeHeader string) ([]byte, e
 		return nil, fmt.Errorf("failed to parse media type': %w", err)
 	}
 
-	if mediaType != "multipart/form-data" {
-		return decodedBodyBytes, nil
-	}
 	if mediaType == "application/x-www-form-urlencoded" {
 		log.Println("url encoded")
 		log.Println("decoded body", string(decodedBodyBytes))
@@ -187,6 +184,9 @@ func getImageBytes(decodedBodyBytes []byte, contentTypeHeader string) ([]byte, e
 			log.Printf("params %s:%s", k, v)
 		}
 		return nil, fmt.Errorf("don't support url encoding yet")
+	}
+	if mediaType != "multipart/form-data" {
+		return decodedBodyBytes, nil
 	}
 	decodedBody := string(decodedBodyBytes)
 	reader := multipart.NewReader(strings.NewReader(decodedBody), params["boundary"])
