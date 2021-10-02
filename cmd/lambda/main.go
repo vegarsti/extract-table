@@ -9,6 +9,7 @@ import (
 	"log"
 	"mime"
 	"mime/multipart"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -179,9 +180,7 @@ func getImageBytes(decodedBodyBytes []byte, contentTypeHeader string) ([]byte, e
 	}
 
 	if mediaType == "application/x-www-form-urlencoded" {
-		log.Println("url encoded")
 		s := string(decodedBodyBytes)
-		log.Println("decoded body", s)
 		v, err := url.ParseQuery(s)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse url encoded value: %w", err)
@@ -190,8 +189,15 @@ func getImageBytes(decodedBodyBytes []byte, contentTypeHeader string) ([]byte, e
 		if u == "" {
 			return nil, fmt.Errorf("empty value for url")
 		}
-		log.Printf("url %s", u)
-		return nil, fmt.Errorf("don't support url encoding yet")
+		resp, err := http.Get(u)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch url '%s': %w", u, err)
+		}
+		bs, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read response from url fetch: %w", err)
+		}
+		return bs, nil
 	}
 	if mediaType != "multipart/form-data" {
 		return decodedBodyBytes, nil
