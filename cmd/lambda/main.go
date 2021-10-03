@@ -37,6 +37,10 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return errorResponse(fmt.Errorf("unable to convert base64 to bytes: %w", err)), nil
 	}
 
+	for header, value := range req.Headers {
+		log.Printf("%s: %s", header, value)
+	}
+
 	imageBytes, err := getImageBytes(decodedBodyBytes, req.Headers["content-type"])
 	if err != nil {
 		return errorResponse(err), nil
