@@ -25,10 +25,16 @@ import (
 )
 
 func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
+	// ensure headers are lower-case (according to the spec, they are case insensitive)
+	reqHeaders := make(map[string]string)
+	for header, value := range req.Headers {
+		reqHeaders[strings.ToLower(header)] = value
+	}
+
 	if !req.IsBase64Encoded {
 		return errorResponse(fmt.Errorf(
 			"request body must have a content-type that is either image/png, image/jpeg, multipart/form-data or application/x-www-form-urlencoded, got '%s'",
-			req.Headers["content-type"],
+			reqHeaders["content-type"],
 		)), nil
 	}
 
@@ -37,11 +43,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return errorResponse(fmt.Errorf("unable to convert base64 to bytes: %w", err)), nil
 	}
 
-	for header, value := range req.Headers {
-		log.Printf("%s: %s", header, value)
-	}
-
-	imageBytes, err := getImageBytes(decodedBodyBytes, req.Headers["content-type"])
+	imageBytes, err := getImageBytes(decodedBodyBytes, reqHeaders["content-type"])
 	if err != nil {
 		return errorResponse(err), nil
 	}
@@ -57,7 +59,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return nil, fmt.Errorf("failed to convert to json: %w", err)
 	}
 
-	responseMediaType, err := determineResponseMediaType(req.Headers["accept"])
+	responseMediaType, err := determineResponseMediaType(reqHeaders["accept"])
 	if err != nil {
 		return errorResponse(err), nil
 	}
