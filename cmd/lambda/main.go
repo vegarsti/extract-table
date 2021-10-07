@@ -29,11 +29,12 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	reqHeaders := make(map[string]string)
 	for header, value := range req.Headers {
 		reqHeaders[strings.TrimSpace(strings.ToLower(header))] = value
+		log.Printf("%s: %s", header, value)
 	}
 
 	if !req.IsBase64Encoded {
 		return errorResponse(fmt.Errorf(
-			"request body must have a content-type that is either image/png, image/jpeg, multipart/form-data or application/x-www-form-urlencoded, got '%s'",
+			"request body must have a content-type that is either image/png, image/jpeg, application/pdf, multipart/form-data or application/x-www-form-urlencoded, got '%s'",
 			reqHeaders["content-type"],
 		)), nil
 	}
@@ -207,6 +208,10 @@ func getImageBytes(decodedBodyBytes []byte, contentTypeHeader string) ([]byte, e
 	}
 	if mediaType != "multipart/form-data" {
 		return decodedBodyBytes, nil
+	}
+	log.Printf("multipart form data params")
+	for param, value := range params {
+		log.Printf("%s: %s", param, value)
 	}
 	decodedBody := string(decodedBodyBytes)
 	reader := multipart.NewReader(strings.NewReader(decodedBody), params["boundary"])
