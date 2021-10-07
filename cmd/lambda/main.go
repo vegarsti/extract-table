@@ -29,6 +29,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	reqHeaders := make(map[string]string)
 	for header, value := range req.Headers {
 		reqHeaders[strings.TrimSpace(strings.ToLower(header))] = value
+		log.Printf("%s: %s", header, value)
 	}
 
 	if !req.IsBase64Encoded {
