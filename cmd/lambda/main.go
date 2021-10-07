@@ -209,6 +209,10 @@ func getImageBytes(decodedBodyBytes []byte, contentTypeHeader string) ([]byte, e
 	if mediaType != "multipart/form-data" {
 		return decodedBodyBytes, nil
 	}
+	log.Printf("multipart form data params")
+	for param, value := range params {
+		log.Printf("%s: %s", param, value)
+	}
 	decodedBody := string(decodedBodyBytes)
 	reader := multipart.NewReader(strings.NewReader(decodedBody), params["boundary"])
 	tenMBInBytes := 10000000
