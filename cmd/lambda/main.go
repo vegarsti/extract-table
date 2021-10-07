@@ -33,7 +33,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 
 	if !req.IsBase64Encoded {
 		return errorResponse(fmt.Errorf(
-			"request body must have a content-type that is either image/png, image/jpeg, multipart/form-data or application/x-www-form-urlencoded, got '%s'",
+			"request body must have a content-type that is either image/png, image/jpeg, application/pdf, multipart/form-data or application/x-www-form-urlencoded, got '%s'",
 			reqHeaders["content-type"],
 		)), nil
 	}
