@@ -14,7 +14,7 @@ import (
 	"github.com/vegarsti/extract/s3"
 )
 
-func Extract(bs []byte) (*textract.AnalyzeDocumentOutput, error) {
+func Extract(bs []byte, isPDF bool) (*textract.AnalyzeDocumentOutput, error) {
 	sess, err := session.NewSession()
 	if err != nil {
 		return nil, fmt.Errorf("unable to create session: %w", err)
@@ -24,6 +24,9 @@ func Extract(bs []byte) (*textract.AnalyzeDocumentOutput, error) {
 	input := &textract.AnalyzeDocumentInput{
 		Document:     &textract.Document{Bytes: bs},
 		FeatureTypes: []*string{&tables},
+	}
+	if isPDF {
+		return extractPDF(bs)
 	}
 	output, err := svc.AnalyzeDocument(input)
 	if err != nil {

@@ -28,7 +28,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	// ensure headers are lower-case (according to the spec, they are case insensitive)
 	reqHeaders := make(map[string]string)
 	for header, value := range req.Headers {
-		reqHeaders[strings.ToLower(header)] = value
+		reqHeaders[strings.TrimSpace(strings.ToLower(header))] = value
 	}
 
 	if !req.IsBase64Encoded {
@@ -50,7 +50,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 
 	// get table, from cache if possible, if not from textract
 	identifier := fmt.Sprintf("%x", sha256.Sum256(imageBytes))
-	table, err := getTable(imageBytes, identifier)
+	table, err := getTable(imageBytes, identifier, reqHeaders["content-type"] == "application/pdf")
 	if err != nil {
 		return errorResponse(err), nil
 	}
@@ -101,7 +101,7 @@ func main() {
 }
 
 // getTable either cached from DynamoDB if it has been processed before, or perform OCR with Textract
-func getTable(imageBytes []byte, checksum string) ([][]string, error) {
+func getTable(imageBytes []byte, checksum string, isPDF bool) ([][]string, error) {
 	startGet := time.Now()
 	tableBytes, err := dynamodb.GetTable(checksum)
 	if err != nil {
@@ -116,7 +116,7 @@ func getTable(imageBytes []byte, checksum string) ([][]string, error) {
 		return table, nil
 	}
 	startOCR := time.Now()
-	output, err := textract.Extract(imageBytes)
+	output, err := textract.Extract(imageBytes, isPDF)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract: %w", err)
 	}
