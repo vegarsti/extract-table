@@ -30,6 +30,27 @@ func UploadPNG(identifier string, data []byte) error {
 	return nil
 }
 
+func UploadPDF(identifier string, data []byte) error {
+	sess, err := session.NewSession()
+	if err != nil {
+		return fmt.Errorf("unable to create session: %w", err)
+	}
+	uploader := s3manager.NewUploader(sess)
+	contentDisposition := fmt.Sprintf(`attachment; filename="%s.pdf"`, identifier)
+	contentType := "application/pdf"
+	uploadParams := &s3manager.UploadInput{
+		Bucket:             aws.String("results.extract-table.com"),
+		Key:                aws.String(identifier + ".pdf"),
+		Body:               bytes.NewReader(data),
+		ContentDisposition: &contentDisposition,
+		ContentType:        &contentType,
+	}
+	if _, err := uploader.Upload(uploadParams); err != nil {
+		return fmt.Errorf("uploadPNG: %v", err)
+	}
+	return nil
+}
+
 func UploadCSV(identifier string, data []byte) error {
 	sess, err := session.NewSession()
 	if err != nil {

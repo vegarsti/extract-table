@@ -1,17 +1,20 @@
 package textract
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"math"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/textract"
 	"github.com/vegarsti/extract"
+	"github.com/vegarsti/extract/s3"
 )
 
-func Extract(bs []byte) (*textract.AnalyzeDocumentOutput, error) {
+func Extract(bs []byte, isPDF bool) (*textract.AnalyzeDocumentOutput, error) {
 	sess, err := session.NewSession()
 	if err != nil {
 		return nil, fmt.Errorf("unable to create session: %w", err)
@@ -22,11 +25,57 @@ func Extract(bs []byte) (*textract.AnalyzeDocumentOutput, error) {
 		Document:     &textract.Document{Bytes: bs},
 		FeatureTypes: []*string{&tables},
 	}
+	if isPDF {
+		return extractPDF(bs)
+	}
 	output, err := svc.AnalyzeDocument(input)
 	if err != nil {
 		return nil, err
 	}
 	return output, nil
+}
+
+func extractPDF(bs []byte) (*textract.AnalyzeDocumentOutput, error) {
+	sess, err := session.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("unable to create session: %w", err)
+	}
+	identifier := fmt.Sprintf("%x", sha256.Sum256(bs))
+	if err := s3.UploadPDF(identifier, bs); err != nil {
+		return nil, fmt.Errorf("upload PDF: %w", err)
+	}
+	svc := textract.New(sess)
+	bucket := "results.extract-table.com"
+	name := identifier + ".pdf"
+	tables := "TABLES"
+	startInput := &textract.StartDocumentAnalysisInput{
+		DocumentLocation: &textract.DocumentLocation{
+			S3Object: &textract.S3Object{
+				Bucket: &bucket,
+				Name:   &name,
+			},
+		},
+		FeatureTypes: []*string{&tables},
+	}
+	startOutput, err := svc.StartDocumentAnalysis(startInput)
+	if err != nil {
+		return nil, fmt.Errorf("start document analysis: %w", err)
+	}
+	getInput := &textract.GetDocumentAnalysisInput{JobId: startOutput.JobId}
+	processing := true
+	var getOutput *textract.GetDocumentAnalysisOutput
+	for processing {
+		time.Sleep(10 * time.Millisecond)
+		getOutput, err = svc.GetDocumentAnalysis(getInput)
+		if err != nil {
+			return nil, fmt.Errorf("get document analysis: %w", err)
+		}
+		processing = *getOutput.JobStatus == "IN_PROGRESS"
+	}
+	return &textract.AnalyzeDocumentOutput{
+		Blocks:           getOutput.Blocks,
+		DocumentMetadata: getOutput.DocumentMetadata,
+	}, nil
 }
 
 func ToTableFromDetectedTable(output *textract.AnalyzeDocumentOutput) ([][]string, error) {

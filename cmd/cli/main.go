@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/vegarsti/extract/dynamodb"
@@ -15,8 +16,8 @@ import (
 var awsRegion string
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "usage: extract-table [file ...]\n")
+	if len(os.Args) < 2 || len(os.Args) > 3 {
+		fmt.Fprintf(os.Stderr, "usage: extract-table [file ...] isPDF \n")
 		os.Exit(1)
 	}
 	if err := readEnvVars(); err != nil {
@@ -26,6 +27,16 @@ func main() {
 	imageBytes, err := ioutil.ReadFile(filename)
 	if err != nil {
 		die(err)
+	}
+
+	var isPDF bool
+	if len(os.Args) == 3 {
+		boolean := strings.ToLower(os.Args[2])
+		parsedBoolean, ok := map[string]bool{"f": false, "false": false, "t": true, "true": true}[boolean]
+		if !ok {
+			die(fmt.Errorf("'%s' is invalid for boolean flag isPDF", boolean))
+		}
+		isPDF = parsedBoolean
 	}
 
 	// Check if table is stored
@@ -41,7 +52,7 @@ func main() {
 		return
 	}
 
-	output, err := textract.Extract(imageBytes)
+	output, err := textract.Extract(imageBytes, isPDF)
 	if err != nil {
 		die(err)
 	}
