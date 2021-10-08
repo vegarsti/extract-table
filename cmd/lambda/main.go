@@ -230,6 +230,20 @@ func getImageBytes(decodedBodyBytes []byte, contentTypeHeader string) ([]byte, e
 		}
 	}
 
+	log.Printf("multipart form file")
+	log.Printf("%s: %s", "filename", file[0].Filename)
+	for key, values := range form.Value {
+		for _, value := range values {
+			log.Printf("%s: %s", key, value)
+		}
+	}
+	log.Printf("multipart form file header")
+	for key, values := range file[0].Header {
+		for _, value := range values {
+			log.Printf("%s: %s", key, value)
+		}
+	}
+
 	f, err := file[0].Open()
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file': %w", err)
