@@ -80,12 +80,14 @@ func UploadHTML(identifier string, data []byte) error {
 	uploader := s3manager.NewUploader(sess)
 	contentType := "text/html"
 	contentDisposition := "inline"
+	cacheControl := "max-age=3600"
 	uploadParams := &s3manager.UploadInput{
 		Bucket:             aws.String("results.extract-table.com"),
 		Key:                aws.String(identifier),
 		Body:               bytes.NewReader(data),
 		ContentDisposition: &contentDisposition,
 		ContentType:        &contentType,
+		CacheControl:       &cacheControl,
 	}
 	if _, err := uploader.Upload(uploadParams); err != nil {
 		return fmt.Errorf("uploadHTML: %v", err)
