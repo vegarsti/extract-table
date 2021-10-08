@@ -209,21 +209,27 @@ func getImageBytes(decodedBodyBytes []byte, contentTypeHeader string) ([]byte, e
 	if mediaType != "multipart/form-data" {
 		return decodedBodyBytes, nil
 	}
-	log.Printf("multipart form data params")
-	for param, value := range params {
-		log.Printf("%s: %s", param, value)
-	}
 	decodedBody := string(decodedBodyBytes)
 	reader := multipart.NewReader(strings.NewReader(decodedBody), params["boundary"])
+
 	tenMBInBytes := 10000000
 	form, err := reader.ReadForm(int64(tenMBInBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read form': %w", err)
 	}
+
 	file, ok := form.File["image"]
 	if !ok {
 		return nil, fmt.Errorf("no file in form field 'image'")
 	}
+
+	log.Printf("multipart form request body values")
+	for key, values := range form.Value {
+		for _, value := range values {
+			log.Printf("%s: %s", key, value)
+		}
+	}
+
 	f, err := file[0].Open()
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file': %w", err)
