@@ -2,6 +2,7 @@ package html
 
 import (
 	"bytes"
+	"log"
 	"text/template"
 )
 
@@ -76,6 +77,7 @@ var imageHTMLTemplate = template.Must(template.New("table").Parse(imageHTMLTempl
 var pdfHTMLTemplate = template.Must(template.New("table").Parse(pdfHTMLTemplateString))
 
 func FromTable(stringTable [][]string, mediaType string, imageURL string, csvURL string, pdfURL string) []byte {
+	log.Printf("creating html for media type %s", mediaType)
 	var table Table
 	table.CSVURL = csvURL
 	buf := bytes.NewBufferString("")
@@ -87,6 +89,7 @@ func FromTable(stringTable [][]string, mediaType string, imageURL string, csvURL
 		table.Rows = append(table.Rows, r)
 	}
 	if mediaType == "pdf" {
+		log.Println("pdf")
 		table.PDFURL = pdfURL
 		pdfHTMLTemplate.Execute(buf, table)
 	} else {
