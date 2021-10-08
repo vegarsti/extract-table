@@ -44,14 +44,14 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return errorResponse(fmt.Errorf("unable to convert base64 to bytes: %w", err)), nil
 	}
 
-	imageBytes, err := getImageBytes(decodedBodyBytes, reqHeaders["content-type"])
+	imageBytes, mediaType, err := getImageBytes(decodedBodyBytes, reqHeaders["content-type"])
 	if err != nil {
 		return errorResponse(err), nil
 	}
 
 	// get table, from cache if possible, if not from textract
 	identifier := fmt.Sprintf("%x", sha256.Sum256(imageBytes))
-	table, err := getTable(imageBytes, identifier, reqHeaders["content-type"] == "application/pdf")
+	table, err := getTable(imageBytes, identifier, mediaType)
 	if err != nil {
 		return errorResponse(err), nil
 	}
@@ -102,7 +102,7 @@ func main() {
 }
 
 // getTable either cached from DynamoDB if it has been processed before, or perform OCR with Textract
-func getTable(imageBytes []byte, checksum string, isPDF bool) ([][]string, error) {
+func getTable(imageBytes []byte, checksum string, mediaType string) ([][]string, error) {
 	startGet := time.Now()
 	tableBytes, err := dynamodb.GetTable(checksum)
 	if err != nil {
@@ -117,7 +117,7 @@ func getTable(imageBytes []byte, checksum string, isPDF bool) ([][]string, error
 		return table, nil
 	}
 	startOCR := time.Now()
-	output, err := textract.Extract(imageBytes, isPDF)
+	output, err := textract.Extract(imageBytes, mediaType == "pdf")
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract: %w", err)
 	}
@@ -180,47 +180,64 @@ func getTable(imageBytes []byte, checksum string, isPDF bool) ([][]string, error
 
 // getImageBytes from the decoded body from the HTTP request. The contentTypeHeader is needed to determine how to get the data,
 // in particular if the content type is "multipart/form-data", then we need to do some more work to get the image.
-func getImageBytes(decodedBodyBytes []byte, contentTypeHeader string) ([]byte, error) {
+func getImageBytes(decodedBodyBytes []byte, contentTypeHeader string) ([]byte, string, error) {
 	mediaType, params, err := mime.ParseMediaType(contentTypeHeader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse media type': %w", err)
+		return nil, "", fmt.Errorf("failed to parse media type: %w", err)
 	}
 
 	if mediaType == "application/x-www-form-urlencoded" {
 		s := string(decodedBodyBytes)
 		v, err := url.ParseQuery(s)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse url encoded value: %w", err)
+			return nil, "", fmt.Errorf("failed to parse url encoded value: %w", err)
 		}
 		u := v.Get("url")
 		if u == "" {
-			return nil, fmt.Errorf("empty value for url")
+			return nil, "", fmt.Errorf("empty value for url")
 		}
 		resp, err := http.Get(u)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch url '%s': %w", u, err)
+			return nil, "", fmt.Errorf("failed to fetch url '%s': %w", u, err)
 		}
 		bs, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read response from url fetch: %w", err)
+			return nil, "", fmt.Errorf("failed to read response from url fetch: %w", err)
 		}
-		return bs, nil
+		if strings.Contains(u, ".pdf") {
+			return bs, "pdf", nil
+		}
+		if strings.Contains(u, ".jpg") || strings.Contains(u, ".jpeg") {
+			return bs, "jpg", nil
+		}
+		return bs, "png", nil
 	}
+	if mediaType == "image/png" {
+		return decodedBodyBytes, "png", nil
+	}
+	if mediaType == "image/jpeg" {
+		return decodedBodyBytes, "jpg", nil
+	}
+	if mediaType == "application/pdf" {
+		return decodedBodyBytes, "pdf", nil
+	}
+
 	if mediaType != "multipart/form-data" {
-		return decodedBodyBytes, nil
+		return nil, "", fmt.Errorf("invalid media type: %s", mediaType)
 	}
+
 	decodedBody := string(decodedBodyBytes)
 	reader := multipart.NewReader(strings.NewReader(decodedBody), params["boundary"])
 
 	tenMBInBytes := 10000000
 	form, err := reader.ReadForm(int64(tenMBInBytes))
 	if err != nil {
-		return nil, fmt.Errorf("failed to read form': %w", err)
+		return nil, "", fmt.Errorf("failed to read form': %w", err)
 	}
 
 	file, ok := form.File["image"]
 	if !ok {
-		return nil, fmt.Errorf("no file in form field 'image'")
+		return nil, "", fmt.Errorf("no file in form field 'image'")
 	}
 
 	log.Printf("multipart form request body values")
@@ -244,15 +261,32 @@ func getImageBytes(decodedBodyBytes []byte, contentTypeHeader string) ([]byte, e
 		}
 	}
 
+	contentType := file[0].Header.Get("content-type")
+	mediaType, params, err = mime.ParseMediaType(contentType)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to parse media type in form: %w", err)
+	}
+
 	f, err := file[0].Open()
 	if err != nil {
-		return nil, fmt.Errorf("failed to open file': %w", err)
+		return nil, "", fmt.Errorf("failed to open file': %w", err)
 	}
 	data, err := ioutil.ReadAll(f)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file': %w", err)
+		return nil, "", fmt.Errorf("failed to read file': %w", err)
 	}
-	return data, nil
+
+	if mediaType == "image/png" {
+		return data, "png", nil
+	}
+	if mediaType == "image/jpeg" {
+		return data, "jpg", nil
+	}
+	if mediaType == "application/pdf" {
+		return data, "pdf", nil
+	}
+
+	return nil, "", fmt.Errorf("invalid media type: %s", mediaType)
 }
 
 // determineResponseMediaType determines what media type to return by looking at the Accept HTTP header
