@@ -73,8 +73,8 @@ var pdfHTMLTemplateString = `
 </html>
 `
 
-var imageHTMLTemplate = template.Must(template.New("table").Parse(imageHTMLTemplateString))
-var pdfHTMLTemplate = template.Must(template.New("table").Parse(pdfHTMLTemplateString))
+var imageHTMLTemplate = template.Must(template.New("imageTable").Parse(imageHTMLTemplateString))
+var pdfHTMLTemplate = template.Must(template.New("pdfTable").Parse(pdfHTMLTemplateString))
 
 func FromTable(stringTable [][]string, mediaType string, imageURL string, csvURL string, pdfURL string) []byte {
 	log.Printf("creating html for media type %s", mediaType)
