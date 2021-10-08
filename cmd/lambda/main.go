@@ -135,7 +135,8 @@ func getTable(imageBytes []byte, checksum string, mediaType string) ([][]string,
 	url := "https://results.extract-table.com/" + checksum
 	imageURL := url + ".png" // what about jpg?
 	csvURL := url + ".csv"
-	htmlBytes := html.FromTable(table, imageURL, csvURL)
+	pdfURL := url + ".pdf"
+	htmlBytes := html.FromTable(table, mediaType, imageURL, csvURL, pdfURL)
 
 	g := new(errgroup.Group)
 	g.Go(func() error {

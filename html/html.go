@@ -17,9 +17,10 @@ type Table struct {
 	Rows     []Row
 	ImageURL string
 	CSVURL   string
+	PDFURL   string
 }
 
-var tmplString = `
+var imageHTMLTemplateString = `
 <!DOCTYPE html>
 <html>
 	<head>
@@ -45,13 +46,39 @@ var tmplString = `
 </html>
 `
 
-var tmpl = template.Must(template.New("table").Parse(tmplString))
+var pdfHTMLTemplateString = `
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<style>
+			table, th, td {
+				border: 1px solid black;
+				border-collapse: collapse;
+				padding: 5px;
+			}
+		</style>
+	</head>
+	<body>
+		<a href="{{.CSVURL}}">Download CSV.</a>
+		<table>{{range .Rows}}
+			<tr>{{range .Cells}}
+				<td>{{.Text}}</td>{{end}}
+			</tr>{{end}}
+		</table>
+		<br />
+		<a href="{{.PDFURL}}">Original PDF.</a>
+	</body>
+</html>
+`
 
-func FromTable(stringTable [][]string, imageURL string, csvURL string) []byte {
-	table := Table{
-		ImageURL: imageURL,
-		CSVURL:   csvURL,
-	}
+var imageHTMLTemplate = template.Must(template.New("table").Parse(imageHTMLTemplateString))
+var pdfHTMLTemplate = template.Must(template.New("table").Parse(pdfHTMLTemplateString))
+
+func FromTable(stringTable [][]string, mediaType string, imageURL string, csvURL string, pdfURL string) []byte {
+	var table Table
+	table.CSVURL = csvURL
+	buf := bytes.NewBufferString("")
 	for _, row := range stringTable {
 		var r Row
 		for _, cell := range row {
@@ -59,7 +86,12 @@ func FromTable(stringTable [][]string, imageURL string, csvURL string) []byte {
 		}
 		table.Rows = append(table.Rows, r)
 	}
-	buf := bytes.NewBufferString("")
-	tmpl.Execute(buf, table)
+	if mediaType == "pdf" {
+		table.PDFURL = pdfURL
+		pdfHTMLTemplate.Execute(buf, table)
+	} else {
+		table.ImageURL = imageURL
+		imageHTMLTemplate.Execute(buf, table)
+	}
 	return buf.Bytes()
 }
