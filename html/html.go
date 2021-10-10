@@ -36,8 +36,10 @@ var imageHTMLTemplateString = `
 		</style>
 	</head>
 	<body>
+		Extract Table by Vegard Stikbakke. Go back <a href="https://extract-table.com">home</a>.
+		<br /><br />
 		<a href="{{.CSVURL}}">Download CSV.</a>
-		<br />
+		<br /><br />
 		<table>{{range .Rows}}
 			<tr>{{range .Cells}}
 				<td>{{.Text}}</td>{{end}}
@@ -63,8 +65,10 @@ var pdfHTMLTemplateString = `
 		</style>
 	</head>
 	<body>
+		Extract Table by Vegard Stikbakke. Go back <a href="https://extract-table.com">home</a>.
+		<br /><br />
 		<a href="{{.CSVURL}}">Download CSV.</a>
-		<br />
+		<br /><br />
 		<table>{{range .Rows}}
 			<tr>{{range .Cells}}
 				<td>{{.Text}}</td>{{end}}
