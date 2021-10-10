@@ -293,6 +293,7 @@ func getFile(decodedBodyBytes []byte, contentTypeHeader string) (*extract.File, 
 // The header is on the form accept: text/html, application/xhtml+xml, application/xml;q=0.9
 // where the content types are listed in preferred order.
 func determineResponseMediaType(acceptResponseHeader string) (string, error) {
+	log.Printf("Accept: %s", acceptResponseHeader)
 	acceptResponseTypes := strings.Split(acceptResponseHeader, ",")
 	for _, e := range acceptResponseTypes {
 		mediaType, _, err := mime.ParseMediaType(e)
