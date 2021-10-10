@@ -2,8 +2,9 @@ package html
 
 import (
 	"bytes"
-	"log"
 	"text/template"
+
+	"github.com/vegarsti/extract"
 )
 
 type Cell struct {
@@ -76,8 +77,7 @@ var pdfHTMLTemplateString = `
 var imageHTMLTemplate = template.Must(template.New("imageTable").Parse(imageHTMLTemplateString))
 var pdfHTMLTemplate = template.Must(template.New("pdfTable").Parse(pdfHTMLTemplateString))
 
-func FromTable(stringTable [][]string, mediaType string, imageURL string, csvURL string, pdfURL string) []byte {
-	log.Printf("creating html for media type %s", mediaType)
+func FromTable(stringTable [][]string, mediaType extract.FileType, imageURL string, csvURL string, pdfURL string) []byte {
 	var table Table
 	table.CSVURL = csvURL
 	buf := bytes.NewBufferString("")
@@ -89,7 +89,6 @@ func FromTable(stringTable [][]string, mediaType string, imageURL string, csvURL
 		table.Rows = append(table.Rows, r)
 	}
 	if mediaType == "pdf" {
-		log.Println("pdf")
 		table.PDFURL = pdfURL
 		pdfHTMLTemplate.Execute(buf, table)
 	} else {

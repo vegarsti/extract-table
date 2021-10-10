@@ -9,6 +9,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/vegarsti/extract"
 	"github.com/vegarsti/extract/dynamodb"
 	"github.com/vegarsti/extract/textract"
 )
@@ -29,14 +30,16 @@ func main() {
 		die(err)
 	}
 
-	var isPDF bool
+	contentType := extract.PNG
 	if len(os.Args) == 3 {
 		boolean := strings.ToLower(os.Args[2])
-		parsedBoolean, ok := map[string]bool{"f": false, "false": false, "t": true, "true": true}[boolean]
+		isPDF, ok := map[string]bool{"f": false, "false": false, "t": true, "true": true}[boolean]
 		if !ok {
 			die(fmt.Errorf("'%s' is invalid for boolean flag isPDF", boolean))
 		}
-		isPDF = parsedBoolean
+		if isPDF {
+			contentType = extract.PDF
+		}
 	}
 
 	// Check if table is stored
@@ -52,7 +55,12 @@ func main() {
 		return
 	}
 
-	output, err := textract.Extract(imageBytes, isPDF)
+	file := &extract.File{
+		Bytes:       imageBytes,
+		ContentType: contentType,
+	}
+
+	output, err := textract.Extract(file)
 	if err != nil {
 		die(err)
 	}

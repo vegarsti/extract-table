@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/vegarsti/extract"
 	"github.com/vegarsti/extract/csv"
 	"github.com/vegarsti/extract/dynamodb"
 	"github.com/vegarsti/extract/html"
@@ -44,14 +44,13 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return errorResponse(fmt.Errorf("unable to convert base64 to bytes: %w", err)), nil
 	}
 
-	imageBytes, mediaType, err := getImageBytes(decodedBodyBytes, reqHeaders["content-type"])
+	file, err := getFile(decodedBodyBytes, reqHeaders["content-type"])
 	if err != nil {
 		return errorResponse(err), nil
 	}
 
 	// get table, from cache if possible, if not from textract
-	identifier := fmt.Sprintf("%x", sha256.Sum256(imageBytes))
-	table, err := getTable(imageBytes, identifier, mediaType)
+	table, err := getTable(file)
 	if err != nil {
 		return errorResponse(err), nil
 	}
@@ -68,7 +67,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	case "text/html":
 		return &events.APIGatewayProxyResponse{
 			Headers: map[string]string{
-				"Location": "https://results.extract-table.com/" + identifier,
+				"Location": "https://results.extract-table.com/" + file.Checksum,
 			},
 			StatusCode: 301,
 		}, nil
@@ -102,9 +101,9 @@ func main() {
 }
 
 // getTable either cached from DynamoDB if it has been processed before, or perform OCR with Textract
-func getTable(imageBytes []byte, checksum string, mediaType string) ([][]string, error) {
+func getTable(file *extract.File) ([][]string, error) {
 	startGet := time.Now()
-	tableBytes, err := dynamodb.GetTable(checksum)
+	tableBytes, err := dynamodb.GetTable(file.Checksum)
 	if err != nil {
 		return nil, fmt.Errorf("dynamodb.GetTable: %w", err)
 	}
@@ -117,7 +116,7 @@ func getTable(imageBytes []byte, checksum string, mediaType string) ([][]string,
 		return table, nil
 	}
 	startOCR := time.Now()
-	output, err := textract.Extract(imageBytes, mediaType == "pdf")
+	output, err := textract.Extract(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract: %w", err)
 	}
@@ -132,16 +131,16 @@ func getTable(imageBytes []byte, checksum string, mediaType string) ([][]string,
 	}
 
 	csvBytes := []byte(csv.FromTable(table))
-	url := "https://results.extract-table.com/" + checksum
+	url := "https://results.extract-table.com/" + file.Checksum
 	imageURL := url + ".png" // what about jpg?
 	csvURL := url + ".csv"
 	pdfURL := url + ".pdf"
-	htmlBytes := html.FromTable(table, mediaType, imageURL, csvURL, pdfURL)
+	htmlBytes := html.FromTable(table, file.ContentType, imageURL, csvURL, pdfURL)
 
 	g := new(errgroup.Group)
 	g.Go(func() error {
 		startUpload := time.Now()
-		if err := s3.UploadPNG(checksum, imageBytes); err != nil {
+		if err := s3.UploadPNG(file.Checksum, file.Bytes); err != nil {
 			return err
 		}
 		log.Printf("s3 png %s", time.Since(startUpload).String())
@@ -149,7 +148,7 @@ func getTable(imageBytes []byte, checksum string, mediaType string) ([][]string,
 	})
 	g.Go(func() error {
 		startUpload := time.Now()
-		if err := s3.UploadCSV(checksum, csvBytes); err != nil {
+		if err := s3.UploadCSV(file.Checksum, csvBytes); err != nil {
 			return err
 		}
 		log.Printf("s3 csv %s", time.Since(startUpload).String())
@@ -157,7 +156,7 @@ func getTable(imageBytes []byte, checksum string, mediaType string) ([][]string,
 	})
 	g.Go(func() error {
 		startUpload := time.Now()
-		if err := s3.UploadHTML(checksum, htmlBytes); err != nil {
+		if err := s3.UploadHTML(file.Checksum, htmlBytes); err != nil {
 			return err
 		}
 		log.Printf("s3 html %s", time.Since(startUpload).String())
@@ -165,7 +164,7 @@ func getTable(imageBytes []byte, checksum string, mediaType string) ([][]string,
 	})
 	g.Go(func() error {
 		startPut := time.Now()
-		if err := dynamodb.PutTable(checksum, tableBytes); err != nil {
+		if err := dynamodb.PutTable(file.Checksum, tableBytes); err != nil {
 			return fmt.Errorf("dynamodb.PutTable: %w", err)
 		}
 		log.Printf("dynamodb put: %s", time.Since(startPut).String())
@@ -179,52 +178,52 @@ func getTable(imageBytes []byte, checksum string, mediaType string) ([][]string,
 	return table, nil
 }
 
-// getImageBytes from the decoded body from the HTTP request. The contentTypeHeader is needed to determine how to get the data,
-// in particular if the content type is "multipart/form-data", then we need to do some more work to get the image.
-func getImageBytes(decodedBodyBytes []byte, contentTypeHeader string) ([]byte, string, error) {
+// getFile from the decoded body from the HTTP request. The contentTypeHeader is needed to determine how to get the data,
+// in particular if the content type is "multipart/form-data", then we need to do some more work to get the file.
+func getFile(decodedBodyBytes []byte, contentTypeHeader string) (*extract.File, error) {
 	mediaType, params, err := mime.ParseMediaType(contentTypeHeader)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to parse media type: %w", err)
+		return nil, fmt.Errorf("failed to parse media type: %w", err)
 	}
 
 	if mediaType == "application/x-www-form-urlencoded" {
 		s := string(decodedBodyBytes)
 		v, err := url.ParseQuery(s)
 		if err != nil {
-			return nil, "", fmt.Errorf("failed to parse url encoded value: %w", err)
+			return nil, fmt.Errorf("failed to parse url encoded value: %w", err)
 		}
 		u := v.Get("url")
 		if u == "" {
-			return nil, "", fmt.Errorf("empty value for url")
+			return nil, fmt.Errorf("empty value for url")
 		}
 		resp, err := http.Get(u)
 		if err != nil {
-			return nil, "", fmt.Errorf("failed to fetch url '%s': %w", u, err)
+			return nil, fmt.Errorf("failed to fetch url '%s': %w", u, err)
 		}
 		bs, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return nil, "", fmt.Errorf("failed to read response from url fetch: %w", err)
+			return nil, fmt.Errorf("failed to read response from url fetch: %w", err)
 		}
 		if strings.Contains(u, ".pdf") {
-			return bs, "pdf", nil
+			return extract.NewPDF(bs), nil
 		}
 		if strings.Contains(u, ".jpg") || strings.Contains(u, ".jpeg") {
-			return bs, "jpg", nil
+			return extract.NewJPG(bs), nil
 		}
-		return bs, "png", nil
+		return &extract.File{Bytes: bs, ContentType: extract.PNG}, nil
 	}
 	if mediaType == "image/png" {
-		return decodedBodyBytes, "png", nil
+		return extract.NewPNG(decodedBodyBytes), nil
 	}
 	if mediaType == "image/jpeg" {
-		return decodedBodyBytes, "jpg", nil
+		return extract.NewJPG(decodedBodyBytes), nil
 	}
 	if mediaType == "application/pdf" {
-		return decodedBodyBytes, "pdf", nil
+		return extract.NewPDF(decodedBodyBytes), nil
 	}
 
 	if mediaType != "multipart/form-data" {
-		return nil, "", fmt.Errorf("invalid media type: %s", mediaType)
+		return nil, fmt.Errorf("invalid media type: %s", mediaType)
 	}
 
 	decodedBody := string(decodedBodyBytes)
@@ -233,12 +232,12 @@ func getImageBytes(decodedBodyBytes []byte, contentTypeHeader string) ([]byte, s
 	tenMBInBytes := 10000000
 	form, err := reader.ReadForm(int64(tenMBInBytes))
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to read form': %w", err)
+		return nil, fmt.Errorf("failed to read form': %w", err)
 	}
 
 	file, ok := form.File["image"]
 	if !ok {
-		return nil, "", fmt.Errorf("no file in form field 'image'")
+		return nil, fmt.Errorf("no file in form field 'image'")
 	}
 
 	log.Printf("multipart form request body values")
@@ -263,31 +262,31 @@ func getImageBytes(decodedBodyBytes []byte, contentTypeHeader string) ([]byte, s
 	}
 
 	contentType := file[0].Header.Get("content-type")
-	mediaType, params, err = mime.ParseMediaType(contentType)
+	mediaType, _, err = mime.ParseMediaType(contentType)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to parse media type in form: %w", err)
+		return nil, fmt.Errorf("failed to parse media type in form: %w", err)
 	}
 
 	f, err := file[0].Open()
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to open file': %w", err)
+		return nil, fmt.Errorf("failed to open file': %w", err)
 	}
 	data, err := ioutil.ReadAll(f)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to read file': %w", err)
+		return nil, fmt.Errorf("failed to read file': %w", err)
 	}
 
 	if mediaType == "image/png" {
-		return data, "png", nil
+		return extract.NewPNG(data), nil
 	}
 	if mediaType == "image/jpeg" {
-		return data, "jpg", nil
+		return extract.NewJPG(data), nil
 	}
 	if mediaType == "application/pdf" {
-		return data, "pdf", nil
+		return extract.NewPDF(data), nil
 	}
 
-	return nil, "", fmt.Errorf("invalid media type: %s", mediaType)
+	return nil, fmt.Errorf("invalid media type: %s", mediaType)
 }
 
 // determineResponseMediaType determines what media type to return by looking at the Accept HTTP header

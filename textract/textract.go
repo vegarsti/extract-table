@@ -1,7 +1,6 @@
 package textract
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"math"
 	"sort"
@@ -14,7 +13,7 @@ import (
 	"github.com/vegarsti/extract/s3"
 )
 
-func Extract(bs []byte, isPDF bool) (*textract.AnalyzeDocumentOutput, error) {
+func Extract(file *extract.File) (*textract.AnalyzeDocumentOutput, error) {
 	sess, err := session.NewSession()
 	if err != nil {
 		return nil, fmt.Errorf("unable to create session: %w", err)
@@ -22,11 +21,11 @@ func Extract(bs []byte, isPDF bool) (*textract.AnalyzeDocumentOutput, error) {
 	svc := textract.New(sess)
 	tables := "TABLES"
 	input := &textract.AnalyzeDocumentInput{
-		Document:     &textract.Document{Bytes: bs},
+		Document:     &textract.Document{Bytes: file.Bytes},
 		FeatureTypes: []*string{&tables},
 	}
-	if isPDF {
-		return extractPDF(bs)
+	if file.ContentType == extract.PDF {
+		return extractPDF(file)
 	}
 	output, err := svc.AnalyzeDocument(input)
 	if err != nil {
@@ -35,18 +34,17 @@ func Extract(bs []byte, isPDF bool) (*textract.AnalyzeDocumentOutput, error) {
 	return output, nil
 }
 
-func extractPDF(bs []byte) (*textract.AnalyzeDocumentOutput, error) {
+func extractPDF(file *extract.File) (*textract.AnalyzeDocumentOutput, error) {
 	sess, err := session.NewSession()
 	if err != nil {
 		return nil, fmt.Errorf("unable to create session: %w", err)
 	}
-	identifier := fmt.Sprintf("%x", sha256.Sum256(bs))
-	if err := s3.UploadPDF(identifier, bs); err != nil {
+	if err := s3.UploadPDF(file.Checksum, file.Bytes); err != nil {
 		return nil, fmt.Errorf("upload PDF: %w", err)
 	}
 	svc := textract.New(sess)
 	bucket := "results.extract-table.com"
-	name := identifier + ".pdf"
+	name := file.Checksum + ".pdf"
 	tables := "TABLES"
 	startInput := &textract.StartDocumentAnalysisInput{
 		DocumentLocation: &textract.DocumentLocation{
