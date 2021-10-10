@@ -37,6 +37,7 @@ var imageHTMLTemplateString = `
 	</head>
 	<body>
 		<a href="{{.CSVURL}}">Download CSV.</a>
+		<br />
 		<table>{{range .Rows}}
 			<tr>{{range .Cells}}
 				<td>{{.Text}}</td>{{end}}
@@ -63,6 +64,7 @@ var pdfHTMLTemplateString = `
 	</head>
 	<body>
 		<a href="{{.CSVURL}}">Download CSV.</a>
+		<br />
 		<table>{{range .Rows}}
 			<tr>{{range .Cells}}
 				<td>{{.Text}}</td>{{end}}
