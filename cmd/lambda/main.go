@@ -248,6 +248,7 @@ func getFile(decodedBodyBytes []byte, contentTypeHeader string) (*extract.File, 
 	}
 
 	log.Printf("multipart form file")
+	log.Printf("number of files: %d", len(file))
 	log.Printf("%s: %s", "filename", file[0].Filename)
 	for key, values := range form.Value {
 		for _, value := range values {
