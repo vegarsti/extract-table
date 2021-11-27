@@ -60,14 +60,14 @@ func GetTable(checksum string) ([]byte, error) {
 	}
 	svc := dynamodb.New(sess)
 	projection := "JSONTable"
-	putInput := &dynamodb.GetItemInput{
+	getInput := &dynamodb.GetItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
 			"Checksum": {S: &checksum},
 		},
 		ProjectionExpression: &projection,
 		TableName:            aws.String("Tables"),
 	}
-	output, err := svc.GetItem(putInput)
+	output, err := svc.GetItem(getInput)
 	if err != nil {
 		return nil, fmt.Errorf("get item: %w", err)
 	}
