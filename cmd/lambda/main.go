@@ -44,6 +44,31 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return errorResponse(fmt.Errorf("unable to convert base64 to bytes: %w", err)), nil
 	}
 
+	apiKey, err := getAPIKey(decodedBodyBytes, reqHeaders["content-type"], reqHeaders["api-key"])
+	if err != nil {
+		return errorResponse(err), nil
+	}
+
+	if apiKey == "" {
+		err := fmt.Errorf("no api-key was provided, please email vegard.stikbakke@gmail.com to get a free api key")
+		return errorResponse(err), nil
+	}
+
+	// check if apiKey is valid
+	log.Printf("api-key was: '%s'", apiKey)
+	/*
+		valid, err := dynamodb.VerifyAPIKey(apiKey)
+		if err != nil {
+			err := fmt.Errorf("verify api key: %w", err)
+			return errorResponse(err), nil
+		}
+	*/
+	valid := true
+	if !valid {
+		err := fmt.Errorf("API key '%s' is invalid, please email vegard.stikbakke@gmail.com to get a free api key", apiKey)
+		return errorResponse(err), nil
+	}
+
 	file, err := getFile(decodedBodyBytes, reqHeaders["content-type"])
 	if err != nil {
 		return errorResponse(err), nil
@@ -176,6 +201,47 @@ func getTable(file *extract.File) ([][]string, error) {
 	}
 	log.Printf("errgroup: %s", time.Since(startErrgroup).String())
 	return table, nil
+}
+
+func getAPIKey(decodedBodyBytes []byte, contentTypeHeader string, apiKeyHeader string) (string, error) {
+	mediaType, params, err := mime.ParseMediaType(contentTypeHeader)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse media type: %w", err)
+	}
+
+	if mediaType == "application/x-www-form-urlencoded" {
+		s := string(decodedBodyBytes)
+		v, err := url.ParseQuery(s)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse url encoded value: %w", err)
+		}
+		apiKey := v.Get("api-key")
+		if apiKey == "" {
+			return "", fmt.Errorf("empty value for api-key")
+		}
+		return apiKey, nil
+	}
+	if mediaType == "multipart/form-data" {
+		decodedBody := string(decodedBodyBytes)
+		reader := multipart.NewReader(strings.NewReader(decodedBody), params["boundary"])
+
+		tenMBInBytes := 10000000
+		form, err := reader.ReadForm(int64(tenMBInBytes))
+		if err != nil {
+			return "", fmt.Errorf("failed to read form': %w", err)
+		}
+
+		for key, values := range form.Value {
+			if key == "api-key" {
+				if len(values) != 1 {
+					log.Printf("more than one value for api key")
+				}
+				return values[0], nil
+			}
+		}
+		return "", fmt.Errorf("no api key provided")
+	}
+	return apiKeyHeader, nil
 }
 
 // getFile from the decoded body from the HTTP request. The contentTypeHeader is needed to determine how to get the data,
