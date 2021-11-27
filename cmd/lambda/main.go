@@ -88,11 +88,13 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	if err != nil {
 		return errorResponse(err), nil
 	}
+	url := "https://results.extract-table.com/" + file.Checksum
+	log.Println(url)
 	switch responseMediaType {
 	case "text/html":
 		return &events.APIGatewayProxyResponse{
 			Headers: map[string]string{
-				"Location": "https://results.extract-table.com/" + file.Checksum,
+				"Location": url,
 			},
 			StatusCode: 301,
 		}, nil
