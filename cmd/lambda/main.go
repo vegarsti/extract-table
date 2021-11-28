@@ -49,14 +49,13 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return errorResponse(err), nil
 	}
 
-	if apiKey == "" {
-		err := fmt.Errorf("no api-key was provided, please email vegard.stikbakke@gmail.com to get a free api key")
-		return errorResponse(err), nil
-	}
-
 	// check if apiKey is valid
 	log.Printf("api-key was: '%s'", apiKey)
 	/*
+		if apiKey == "" {
+			err := fmt.Errorf("no api-key was provided, please email vegard.stikbakke@gmail.com to get a free api key")
+			return errorResponse(err), nil
+		}
 		valid, err := dynamodb.VerifyAPIKey(apiKey)
 		if err != nil {
 			err := fmt.Errorf("verify api key: %w", err)
