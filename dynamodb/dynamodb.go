@@ -60,14 +60,14 @@ func GetTable(checksum string) ([]byte, error) {
 	}
 	svc := dynamodb.New(sess)
 	projection := "JSONTable"
-	putInput := &dynamodb.GetItemInput{
+	getInput := &dynamodb.GetItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
 			"Checksum": {S: &checksum},
 		},
 		ProjectionExpression: &projection,
 		TableName:            aws.String("Tables"),
 	}
-	output, err := svc.GetItem(putInput)
+	output, err := svc.GetItem(getInput)
 	if err != nil {
 		return nil, fmt.Errorf("get item: %w", err)
 	}
@@ -76,4 +76,28 @@ func GetTable(checksum string) ([]byte, error) {
 		return nil, nil
 	}
 	return table.B, nil
+}
+
+func VerifyAPIKey(key string) (bool, error) {
+	sess, err := session.NewSession()
+	if err != nil {
+		return false, fmt.Errorf("unable to create session: %w", err)
+	}
+	svc := dynamodb.New(sess)
+	projection := "taken"
+	getInput := &dynamodb.GetItemInput{
+		Key: map[string]*dynamodb.AttributeValue{
+			"key": {S: &key},
+		},
+		ProjectionExpression: &projection,
+		TableName:            aws.String("api-keys"),
+	}
+	output, err := svc.GetItem(getInput)
+	if err != nil {
+		return false, fmt.Errorf("get item: %w", err)
+	}
+	if _, ok := output.Item["taken"]; !ok {
+		return false, nil
+	}
+	return true, nil
 }
