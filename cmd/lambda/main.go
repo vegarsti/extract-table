@@ -44,10 +44,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return errorResponse(fmt.Errorf("unable to convert base64 to bytes: %w", err)), nil
 	}
 
-	apiKey, err := getAPIKey(decodedBodyBytes, reqHeaders["content-type"], reqHeaders["api-key"])
-	if err != nil {
-		return errorResponse(err), nil
-	}
+	apiKey, _ := getAPIKey(decodedBodyBytes, reqHeaders["content-type"], reqHeaders["api-key"])
 
 	// check if apiKey is valid
 	log.Printf("api-key was: '%s'", apiKey)
