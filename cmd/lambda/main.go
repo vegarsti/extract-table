@@ -265,13 +265,16 @@ func getFile(decodedBodyBytes []byte, contentTypeHeader string) (*extract.File, 
 		if err != nil {
 			return nil, fmt.Errorf("failed to read response from url fetch: %w", err)
 		}
+		if len(bs) == 0 {
+			return nil, fmt.Errorf("empty response from url")
+		}
 		if strings.Contains(u, ".pdf") {
 			return extract.NewPDF(bs), nil
 		}
 		if strings.Contains(u, ".jpg") || strings.Contains(u, ".jpeg") {
 			return extract.NewJPG(bs), nil
 		}
-		return &extract.File{Bytes: bs, ContentType: extract.PNG}, nil
+		return extract.NewPNG(bs), nil
 	}
 	if mediaType == "image/png" {
 		return extract.NewPNG(decodedBodyBytes), nil
