@@ -85,6 +85,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	}
 	url := "https://results.extract-table.com/" + file.Checksum
 	log.Println(url)
+	log.Printf("responsemediatype is %s", responseMediaType)
 	switch responseMediaType {
 	case "text/html":
 		return &events.APIGatewayProxyResponse{
