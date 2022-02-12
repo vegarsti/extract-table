@@ -44,22 +44,21 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 		return errorResponse(fmt.Errorf("unable to convert base64 to bytes: %w", err)), nil
 	}
 
-	apiKey, _ := getAPIKey(decodedBodyBytes, reqHeaders["content-type"], reqHeaders["api-key"])
-
+	apiKey, err := getAPIKey(decodedBodyBytes, reqHeaders["content-type"], reqHeaders["api-key"])
+	if err != nil {
+		return errorResponse(fmt.Errorf("error getting api key: %w", err)), nil
+	}
 	// check if apiKey is valid
 	log.Printf("api-key was: '%s'", apiKey)
-	/*
-		if apiKey == "" {
-			err := fmt.Errorf("no api-key was provided, please email vegard.stikbakke@gmail.com to get a free api key")
-			return errorResponse(err), nil
-		}
-		valid, err := dynamodb.VerifyAPIKey(apiKey)
-		if err != nil {
-			err := fmt.Errorf("verify api key: %w", err)
-			return errorResponse(err), nil
-		}
-	*/
-	valid := true
+	if apiKey == "" {
+		err := fmt.Errorf("no api-key was provided, please email vegard.stikbakke@gmail.com to get a free api key")
+		return errorResponse(err), nil
+	}
+	valid, err := dynamodb.VerifyAPIKey(apiKey)
+	if err != nil {
+		err := fmt.Errorf("verify api key: %w", err)
+		return errorResponse(err), nil
+	}
 	if !valid {
 		err := fmt.Errorf("API key '%s' is invalid, please email vegard.stikbakke@gmail.com to get a free api key", apiKey)
 		return errorResponse(err), nil
@@ -214,9 +213,6 @@ func getAPIKey(decodedBodyBytes []byte, contentTypeHeader string, apiKeyHeader s
 			return "", fmt.Errorf("failed to parse url encoded value: %w", err)
 		}
 		apiKey := v.Get("api-key")
-		if apiKey == "" {
-			return "", fmt.Errorf("empty value for api-key")
-		}
 		return apiKey, nil
 	}
 	if mediaType == "multipart/form-data" {
@@ -237,7 +233,7 @@ func getAPIKey(decodedBodyBytes []byte, contentTypeHeader string, apiKeyHeader s
 				return values[0], nil
 			}
 		}
-		return "", fmt.Errorf("no api key provided")
+		return "", nil
 	}
 	return apiKeyHeader, nil
 }
