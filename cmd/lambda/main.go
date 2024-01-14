@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"mime"
 	"mime/multipart"
@@ -146,6 +146,9 @@ func getTable(file *extract.File) ([][]string, error) {
 	// }
 	output, err := textract.DetectDocumentText(file)
 	log.Printf("textract: %s", time.Since(startOCR).String())
+	if err != nil {
+		return nil, fmt.Errorf("textract text detection failed: %w", err)
+	}
 	startAlgorithm := time.Now()
 	table, err := textract.ToTableFromOCR(output)
 	log.Printf("ocr-to-table: %s", time.Since(startAlgorithm).String())
@@ -265,7 +268,7 @@ func getFile(decodedBodyBytes []byte, contentTypeHeader string) (*extract.File, 
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch url '%s': %w", u, err)
 		}
-		bs, err := ioutil.ReadAll(resp.Body)
+		bs, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read response from url fetch: %w", err)
 		}
@@ -340,7 +343,7 @@ func getFile(decodedBodyBytes []byte, contentTypeHeader string) (*extract.File, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file': %w", err)
 	}
-	data, err := ioutil.ReadAll(f)
+	data, err := io.ReadAll(f)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file': %w", err)
 	}
