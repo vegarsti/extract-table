@@ -1,6 +1,7 @@
 package textract
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -10,31 +11,33 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/textract"
 	"github.com/vegarsti/extract"
+	"github.com/vegarsti/extract/box"
 	"github.com/vegarsti/extract/s3"
 )
 
-func Extract(file *extract.File) (*textract.AnalyzeDocumentOutput, error) {
+func AnalyzeDocument(file *extract.File) (*textract.AnalyzeDocumentOutput, error) {
 	sess, err := session.NewSession()
 	if err != nil {
 		return nil, fmt.Errorf("unable to create session: %w", err)
 	}
 	svc := textract.New(sess)
 	tables := "TABLES"
-	input := &textract.AnalyzeDocumentInput{
-		Document:     &textract.Document{Bytes: file.Bytes},
-		FeatureTypes: []*string{&tables},
-	}
 	if file.ContentType == extract.PDF {
-		return extractPDF(file)
+		return analyzePDF(file)
 	}
-	output, err := svc.AnalyzeDocument(input)
+	output, err := svc.AnalyzeDocument(
+		&textract.AnalyzeDocumentInput{
+			Document:     &textract.Document{Bytes: file.Bytes},
+			FeatureTypes: []*string{&tables},
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
 	return output, nil
 }
 
-func extractPDF(file *extract.File) (*textract.AnalyzeDocumentOutput, error) {
+func analyzePDF(file *extract.File) (*textract.AnalyzeDocumentOutput, error) {
 	sess, err := session.NewSession()
 	if err != nil {
 		return nil, fmt.Errorf("unable to create session: %w", err)
@@ -71,6 +74,46 @@ func extractPDF(file *extract.File) (*textract.AnalyzeDocumentOutput, error) {
 		processing = *getOutput.JobStatus == "IN_PROGRESS"
 	}
 	return &textract.AnalyzeDocumentOutput{
+		Blocks:           getOutput.Blocks,
+		DocumentMetadata: getOutput.DocumentMetadata,
+	}, nil
+}
+
+func ocrPDF(file *extract.File) (*textract.DetectDocumentTextOutput, error) {
+	sess, err := session.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("unable to create session: %w", err)
+	}
+	if err := s3.UploadPDF(file.Checksum, file.Bytes); err != nil {
+		return nil, fmt.Errorf("upload PDF: %w", err)
+	}
+	svc := textract.New(sess)
+	bucket := "results.extract-table.com"
+	name := file.Checksum + ".pdf"
+	startInput := &textract.StartDocumentTextDetectionInput{
+		DocumentLocation: &textract.DocumentLocation{
+			S3Object: &textract.S3Object{
+				Bucket: &bucket,
+				Name:   &name,
+			},
+		},
+	}
+	startOutput, err := svc.StartDocumentTextDetection(startInput)
+	if err != nil {
+		return nil, fmt.Errorf("start document analysis: %w", err)
+	}
+	getInput := &textract.GetDocumentTextDetectionInput{JobId: startOutput.JobId}
+	processing := true
+	var getOutput *textract.GetDocumentTextDetectionOutput
+	for processing {
+		time.Sleep(10 * time.Millisecond)
+		getOutput, err = svc.GetDocumentTextDetection(getInput)
+		if err != nil {
+			return nil, fmt.Errorf("get document analysis: %w", err)
+		}
+		processing = *getOutput.JobStatus == "IN_PROGRESS"
+	}
+	return &textract.DetectDocumentTextOutput{
 		Blocks:           getOutput.Blocks,
 		DocumentMetadata: getOutput.DocumentMetadata,
 	}, nil
@@ -130,6 +173,26 @@ func ToTableFromDetectedTable(output *textract.AnalyzeDocumentOutput) ([][]strin
 		}
 	}
 	return rows, nil
+}
+
+func DetectDocumentText(file *extract.File) (*textract.DetectDocumentTextOutput, error) {
+	sess, err := session.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("unable to create session: %w", err)
+	}
+	svc := textract.New(sess)
+	if file.ContentType == extract.PDF {
+		return ocrPDF(file)
+	}
+	output, err := svc.DetectDocumentText(
+		&textract.DetectDocumentTextInput{
+			Document: &textract.Document{Bytes: file.Bytes},
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return output, nil
 }
 
 func textInCellBlock(blocks map[string]*textract.Block, cell *textract.Block) string {
@@ -200,4 +263,55 @@ func toTable(rows [][]extract.Word, splitAt []float64, splitFunc func([]extract.
 		}
 	}
 	return table
+}
+
+func ToTableFromOCR(output *textract.DetectDocumentTextOutput) ([][]string, error) {
+	blocks := make(map[string]*textract.Block)
+	words := 0
+	for _, block := range output.Blocks {
+		blocks[*block.Id] = block
+		if *block.BlockType != "WORD" {
+			words++
+		}
+	}
+	rowMap := make(map[int]map[int]string)
+	for _, cell := range blocks {
+		if *cell.BlockType == "CELL" {
+			rowIndex := int(*cell.RowIndex)
+			colIndex := int(*cell.ColumnIndex)
+			if _, ok := rowMap[rowIndex]; !ok {
+				rowMap[rowIndex] = make(map[int]string)
+			}
+			rowMap[rowIndex][colIndex] = textInCellBlock(blocks, cell)
+		}
+	}
+	// Debug printing
+	// fmt.Printf("%+v", rowMap)
+	// fmt.Printf("%+v", blocks)
+
+	boxes := make([]box.Box, words)
+	for _, cell := range blocks {
+		if *cell.BlockType != "WORD" {
+			continue
+		}
+		box := box.Box{
+			XLeft:   *cell.Geometry.BoundingBox.Left,
+			XRight:  *cell.Geometry.BoundingBox.Left + *cell.Geometry.BoundingBox.Width,
+			YTop:    *cell.Geometry.BoundingBox.Top,
+			YBottom: *cell.Geometry.BoundingBox.Top + *cell.Geometry.BoundingBox.Height,
+			Content: *cell.Text,
+		}
+		// Debug printing
+		// fmt.Printf("left: %+v\n", *cell.Geometry.BoundingBox.Left)
+		// fmt.Printf("top: %+v\n", *cell.Geometry.BoundingBox.Top)
+		// fmt.Printf("width: %+v\n", *cell.Geometry.BoundingBox.Width)
+		// fmt.Printf("height: %+v\n", *cell.Geometry.BoundingBox.Height)
+		// fmt.Printf("%+v\n", box)
+		boxes = append(boxes, box)
+	}
+	table := box.ToTable(boxes)
+	tableJSON, _ := json.MarshalIndent(table, "", "  ")
+	fmt.Println(string(tableJSON))
+
+	return nil, nil
 }

@@ -42,8 +42,10 @@ func PutTable(checksum string, table []byte) error {
 	svc := dynamodb.New(sess)
 	putInput := &dynamodb.PutItemInput{
 		Item: map[string]*dynamodb.AttributeValue{
-			"Checksum":  {S: &checksum},
-			"JSONTable": {B: table},
+			"Checksum": {S: &checksum},
+			// Old: Used table detection directly, new uses custom algorithm
+			// "JSONTable": {B: table},
+			"JSONTableCustomDetection": {B: table},
 		},
 		TableName: aws.String("Tables"),
 	}
@@ -59,7 +61,7 @@ func GetTable(checksum string) ([]byte, error) {
 		return nil, fmt.Errorf("unable to create session: %w", err)
 	}
 	svc := dynamodb.New(sess)
-	projection := "JSONTable"
+	projection := "JSONTable,JSONTableCustomDetection"
 	getInput := &dynamodb.GetItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
 			"Checksum": {S: &checksum},
@@ -71,9 +73,15 @@ func GetTable(checksum string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get item: %w", err)
 	}
-	table, ok := output.Item["JSONTable"]
+	var table *dynamodb.AttributeValue
+	var ok bool
+	table, ok = output.Item["JSONTable"]
 	if !ok {
-		return nil, nil
+		table, ok = output.Item["JSONTableCustomDetection"]
+		if !ok {
+			return nil, nil
+		}
+		return table.B, nil
 	}
 	return table.B, nil
 }

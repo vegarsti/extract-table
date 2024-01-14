@@ -139,12 +139,16 @@ func getTable(file *extract.File) ([][]string, error) {
 		return table, nil
 	}
 	startOCR := time.Now()
-	output, err := textract.Extract(file)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract: %w", err)
-	}
+	// Don't use Textract's Analyze Document, use OCR and custom algorithm instead
+	// output, err := textract.AnalyzeDocument(file)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to extract: %w", err)
+	// }
+	output, err := textract.DetectDocumentText(file)
 	log.Printf("textract: %s", time.Since(startOCR).String())
-	table, err := textract.ToTableFromDetectedTable(output)
+	startAlgorithm := time.Now()
+	table, err := textract.ToTableFromOCR(output)
+	log.Printf("ocr-to-table: %s", time.Since(startAlgorithm).String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert to table: %w", err)
 	}
