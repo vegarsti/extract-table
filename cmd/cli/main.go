@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -25,7 +24,7 @@ func main() {
 		die(err)
 	}
 	filename := os.Args[1]
-	imageBytes, err := ioutil.ReadFile(filename)
+	imageBytes, err := os.ReadFile(filename)
 	if err != nil {
 		die(err)
 	}
@@ -60,7 +59,7 @@ func main() {
 		ContentType: contentType,
 	}
 
-	output, err := textract.Extract(file)
+	output, err := textract.AnalyzeDocument(file)
 	if err != nil {
 		die(err)
 	}
