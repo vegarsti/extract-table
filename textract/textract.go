@@ -1,7 +1,6 @@
 package textract
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -310,8 +309,5 @@ func ToTableFromOCR(output *textract.DetectDocumentTextOutput) ([][]string, erro
 		boxes = append(boxes, box)
 	}
 	table := box.ToTable(boxes)
-	tableJSON, _ := json.MarshalIndent(table, "", "  ")
-	fmt.Println(string(tableJSON))
-
-	return nil, nil
+	return table, nil
 }
