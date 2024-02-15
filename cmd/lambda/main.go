@@ -1,14 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/color"
-	"image/draw"
-	"image/png"
 	"io"
 	"log"
 	"mime"
@@ -25,6 +20,7 @@ import (
 	"github.com/vegarsti/extract/csv"
 	"github.com/vegarsti/extract/dynamodb"
 	"github.com/vegarsti/extract/html"
+	"github.com/vegarsti/extract/image"
 	"github.com/vegarsti/extract/s3"
 	"github.com/vegarsti/extract/textract"
 	"golang.org/x/sync/errgroup"
@@ -166,7 +162,7 @@ func getTable(file *extract.File) ([][]string, error) {
 
 	// Add boxes
 	if file.ContentType == extract.PNG {
-		newEncodedImage, err := AddBoxesToImage(file.Bytes, boxes)
+		newEncodedImage, err := image.AddBoxes(file.Bytes, boxes)
 		if err != nil {
 			log.Printf("add boxes to image 1 failed: %v", err)
 		} else {
@@ -174,7 +170,7 @@ func getTable(file *extract.File) ([][]string, error) {
 			for _, row := range rows {
 				rowsFlattened = append(rowsFlattened, row...)
 			}
-			newEncodedImage2, err := AddBoxesToImage(file.Bytes, rowsFlattened)
+			newEncodedImage2, err := image.AddBoxes(file.Bytes, rowsFlattened)
 			if err != nil {
 				log.Printf("add boxes to image 2 failed: %v", err)
 				file.BytesWithBoxes = []byte(newEncodedImage)
@@ -440,55 +436,4 @@ func determineResponseMediaType(acceptResponseHeader string) (string, error) {
 		}
 	}
 	return "application/json", nil
-}
-
-// AddBoxesToImage adds bounding boxes to the base64 encoded image and returns a new base64 encoded image
-func AddBoxesToImage(encodedImage []byte, boxes []box.Box) (string, error) {
-	imgReader := base64.NewDecoder(base64.StdEncoding, bytes.NewReader(encodedImage))
-	img, _, err := image.Decode(imgReader)
-	if err != nil {
-		return "", err
-	}
-
-	// Create a new image for the output
-	bounds := img.Bounds()
-	outputImg := image.NewRGBA(bounds)
-	draw.Draw(outputImg, bounds, img, bounds.Min, draw.Src)
-
-	// Draw the boxes
-	for _, box := range boxes {
-		drawBox(outputImg, box, bounds)
-	}
-
-	// Encode the modified image back to base64
-	var buf bytes.Buffer
-	err = png.Encode(&buf, outputImg)
-	if err != nil {
-		return "", err
-	}
-
-	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
-}
-
-// drawBox draws a single Box on the image
-func drawBox(img *image.RGBA, box box.Box, bounds image.Rectangle) {
-	col := color.RGBA{255, 0, 0, 255} // Red color for the box outline
-	imgWidth := bounds.Dx()
-	imgHeight := bounds.Dy()
-
-	// Convert normalized coordinates to pixel coordinates
-	x1 := int(box.XLeft * float64(imgWidth))
-	x2 := int(box.XRight * float64(imgWidth))
-	y1 := int(box.YTop * float64(imgHeight))
-	y2 := int(box.YBottom * float64(imgHeight))
-
-	// Draw the rectangle outline
-	for x := x1; x <= x2; x++ {
-		img.Set(x, y1, col)
-		img.Set(x, y2, col)
-	}
-	for y := y1; y <= y2; y++ {
-		img.Set(x1, y, col)
-		img.Set(x2, y, col)
-	}
 }
