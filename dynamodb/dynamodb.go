@@ -34,7 +34,7 @@ func CreateTable(sess *session.Session) error {
 	return nil
 }
 
-func PutTable(checksum string, table []byte) error {
+func PutTable(checksum string, table []byte, boxesJSON []byte) error {
 	sess, err := session.NewSession()
 	if err != nil {
 		return fmt.Errorf("unable to create session: %w", err)
@@ -46,6 +46,7 @@ func PutTable(checksum string, table []byte) error {
 			// Old: Used table detection directly, new uses custom algorithm
 			// "JSONTable": {B: table},
 			"JSONTableCustomDetection": {B: table},
+			"JSONBoxes":                {B: boxesJSON},
 		},
 		TableName: aws.String("Tables"),
 	}

@@ -4,12 +4,15 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/vegarsti/extract"
+	"github.com/vegarsti/extract/box"
 	"github.com/vegarsti/extract/dynamodb"
+	"github.com/vegarsti/extract/image"
 	"github.com/vegarsti/extract/textract"
 )
 
@@ -43,31 +46,53 @@ func main() {
 
 	// Check if table is stored
 	checksum := fmt.Sprintf("%x", sha256.Sum256(imageBytes))
-	fmt.Println(checksum)
-	storedBytes, err := dynamodb.GetTable(checksum)
-	if err != nil {
-		die(err)
-	}
-	if storedBytes != nil {
-		var table [][]string
-		json.Unmarshal(storedBytes, &table)
-		writeTable(table)
-		return
-	}
+	// fmt.Println(checksum)
+	// storedBytes, err := dynamodb.GetTable(checksum)
+	// if err != nil {
+	// 	die(err)
+	// }
+	// if storedBytes != nil {
+	// 	var table [][]string
+	// 	json.Unmarshal(storedBytes, &table)
+	// 	writeTable(table)
+	// 	return
+	// }
 
 	file := &extract.File{
 		Bytes:       imageBytes,
 		ContentType: contentType,
 	}
+	// Don't use Textract's Analyze Document, use OCR and custom algorithm instead
+	output, err := textract.DetectDocumentText(file)
+	if err != nil {
+		die(fmt.Errorf("textract text detection failed: %w", err))
+	}
+	boxes, err := textract.ToLinesFromOCR(output)
+	if err != nil {
+		die(fmt.Errorf("failed to convert to boxes: %w", err))
+	}
+	rows, table := box.ToTable(boxes)
 
-	output, err := textract.AnalyzeDocument(file)
-	if err != nil {
-		die(err)
+	// Add boxes
+	if contentType == extract.PNG {
+		newEncodedImage, err := image.AddBoxes(file.Bytes, boxes)
+		if err != nil {
+			log.Printf("add boxes to image 1 failed: %v", err)
+		} else {
+			rowsFlattened := make([]box.Box, 0)
+			for _, row := range rows {
+				rowsFlattened = append(rowsFlattened, row...)
+			}
+			newEncodedImage2, err := image.AddBoxes(file.Bytes, rowsFlattened)
+			if err != nil {
+				log.Printf("add boxes to image 2 failed: %v", err)
+				file.BytesWithBoxes = []byte(newEncodedImage)
+				file.BytesWithRowBoxes = []byte(newEncodedImage2)
+			}
+			fmt.Println("hello")
+		}
 	}
-	table, err := textract.ToTableFromDetectedTable(output)
-	if err != nil {
-		die(err)
-	}
+
 	writeTable(table)
 
 	// store in dynamo db
@@ -75,7 +100,7 @@ func main() {
 	if err != nil {
 		die(err)
 	}
-	if err := dynamodb.PutTable(checksum[:], tableJSON); err != nil {
+	if err := dynamodb.PutTable(checksum[:], tableJSON, []byte{}); err != nil {
 		die(err)
 	}
 }

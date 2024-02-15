@@ -160,25 +160,27 @@ func getTable(file *extract.File) ([][]string, error) {
 	}
 	rows, table := box.ToTable(boxes)
 
-	// Add boxes
-	if file.ContentType == extract.PNG {
-		newEncodedImage, err := image.AddBoxes(file.Bytes, boxes)
-		if err != nil {
-			log.Printf("add boxes to image 1 failed: %v", err)
-		} else {
+	// Create images with words and cells
+	go func() {
+		if file.ContentType == extract.PNG {
+			imageWithWords, err := image.AddBoxes(file.Bytes, boxes)
+			if err != nil {
+				log.Printf("add word boxes to image failed: %v", err)
+				return
+			}
 			rowsFlattened := make([]box.Box, 0)
 			for _, row := range rows {
 				rowsFlattened = append(rowsFlattened, row...)
 			}
-			newEncodedImage2, err := image.AddBoxes(file.Bytes, rowsFlattened)
+			imageWithCells, err := image.AddBoxes(file.Bytes, rowsFlattened)
 			if err != nil {
-				log.Printf("add boxes to image 2 failed: %v", err)
-			} else {
-				file.BytesWithBoxes = []byte(newEncodedImage)
-				file.BytesWithRowBoxes = []byte(newEncodedImage2)
+				log.Printf("add cell boxes to image failed: %v", err)
+				return
 			}
+			file.BytesWithBoxes = []byte(imageWithWords)
+			file.BytesWithRowBoxes = []byte(imageWithCells)
 		}
-	}
+	}()
 
 	log.Printf("ocr-to-table: %s", time.Since(startAlgorithm).String())
 	if err != nil {
@@ -223,7 +225,11 @@ func getTable(file *extract.File) ([][]string, error) {
 	})
 	g.Go(func() error {
 		startPut := time.Now()
-		if err := dynamodb.PutTable(file.Checksum, tableBytes); err != nil {
+		boxesJSON, err := json.Marshal(boxes)
+		if err != nil {
+			return fmt.Errorf("failed to convert boxes to json: %w", err)
+		}
+		if err := dynamodb.PutTable(file.Checksum, tableBytes, boxesJSON); err != nil {
 			return fmt.Errorf("dynamodb.PutTable: %w", err)
 		}
 		log.Printf("dynamodb put: %s", time.Since(startPut).String())
