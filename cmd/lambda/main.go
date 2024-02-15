@@ -229,6 +229,7 @@ func getTable(file *extract.File) ([][]string, error) {
 		return nil
 	})
 	// Upload the image with boxes to S3
+	log.Printf("len of file.BytesWithBoxes: %d", len(file.BytesWithBoxes))
 	if file.ContentType == extract.PNG && len(file.BytesWithBoxes) > 0 {
 		g.Go(func() error {
 			startUpload := time.Now()
@@ -239,10 +240,11 @@ func getTable(file *extract.File) ([][]string, error) {
 			return nil
 		})
 	}
+	log.Printf("len of file.BytesWithRowBoxes: %d", len(file.BytesWithRowBoxes))
 	if file.ContentType == extract.PNG && len(file.BytesWithRowBoxes) > 0 {
 		g.Go(func() error {
 			startUpload := time.Now()
-			if err := s3.UploadPNG(file.Checksum+"_rows", file.BytesWithBoxes); err != nil {
+			if err := s3.UploadPNG(file.Checksum+"_rows", file.BytesWithRowBoxes); err != nil {
 				return err
 			}
 			log.Printf("s3 png %s", time.Since(startUpload).String())
