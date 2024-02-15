@@ -1,9 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
 	"io"
 	"log"
 	"mime"
@@ -16,6 +21,7 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/vegarsti/extract"
+	"github.com/vegarsti/extract/box"
 	"github.com/vegarsti/extract/csv"
 	"github.com/vegarsti/extract/dynamodb"
 	"github.com/vegarsti/extract/html"
@@ -139,19 +145,44 @@ func getTable(file *extract.File) ([][]string, error) {
 		}
 		return table, nil
 	}
-	startOCR := time.Now()
-	// Don't use Textract's Analyze Document, use OCR and custom algorithm instead
+	// Old: Textract's Analyze Document
 	// output, err := textract.AnalyzeDocument(file)
 	// if err != nil {
 	// 	return nil, fmt.Errorf("failed to extract: %w", err)
 	// }
+	startOCR := time.Now()
+	// Don't use Textract's Analyze Document, use OCR and custom algorithm instead
 	output, err := textract.DetectDocumentText(file)
 	log.Printf("textract: %s", time.Since(startOCR).String())
 	if err != nil {
 		return nil, fmt.Errorf("textract text detection failed: %w", err)
 	}
 	startAlgorithm := time.Now()
-	table, err := textract.ToTableFromOCR(output)
+	boxes, err := textract.ToLinesFromOCR(output)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert to boxes: %w", err)
+	}
+	rows, table := box.ToTable(boxes)
+
+	// Add boxes
+	if file.ContentType == extract.PNG {
+		newEncodedImage, err := AddBoxesToImage(file.Bytes, boxes)
+		if err != nil {
+			log.Printf("add boxes to image 1 failed: %v", err)
+		} else {
+			rowsFlattened := make([]box.Box, 0)
+			for _, row := range rows {
+				rowsFlattened = append(rowsFlattened, row...)
+			}
+			newEncodedImage2, err := AddBoxesToImage(file.Bytes, rowsFlattened)
+			if err != nil {
+				log.Printf("add boxes to image 2 failed: %v", err)
+				file.BytesWithBoxes = []byte(newEncodedImage)
+				file.BytesWithRowBoxes = []byte(newEncodedImage2)
+			}
+		}
+	}
+
 	log.Printf("ocr-to-table: %s", time.Since(startAlgorithm).String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert to table: %w", err)
@@ -201,6 +232,28 @@ func getTable(file *extract.File) ([][]string, error) {
 		log.Printf("dynamodb put: %s", time.Since(startPut).String())
 		return nil
 	})
+	// Upload the image with boxes to S3
+	if file.ContentType == extract.PNG && len(file.BytesWithBoxes) > 0 {
+		g.Go(func() error {
+			startUpload := time.Now()
+			if err := s3.UploadPNG(file.Checksum+"_boxes", file.BytesWithBoxes); err != nil {
+				return err
+			}
+			log.Printf("s3 png %s", time.Since(startUpload).String())
+			return nil
+		})
+	}
+	if file.ContentType == extract.PNG && len(file.BytesWithRowBoxes) > 0 {
+		g.Go(func() error {
+			startUpload := time.Now()
+			if err := s3.UploadPNG(file.Checksum+"_rows", file.BytesWithBoxes); err != nil {
+				return err
+			}
+			log.Printf("s3 png %s", time.Since(startUpload).String())
+			return nil
+		})
+	}
+
 	startErrgroup := time.Now()
 	if err := g.Wait(); err != nil {
 		return nil, err
@@ -387,4 +440,55 @@ func determineResponseMediaType(acceptResponseHeader string) (string, error) {
 		}
 	}
 	return "application/json", nil
+}
+
+// AddBoxesToImage adds bounding boxes to the base64 encoded image and returns a new base64 encoded image
+func AddBoxesToImage(encodedImage []byte, boxes []box.Box) (string, error) {
+	imgReader := base64.NewDecoder(base64.StdEncoding, bytes.NewReader(encodedImage))
+	img, _, err := image.Decode(imgReader)
+	if err != nil {
+		return "", err
+	}
+
+	// Create a new image for the output
+	bounds := img.Bounds()
+	outputImg := image.NewRGBA(bounds)
+	draw.Draw(outputImg, bounds, img, bounds.Min, draw.Src)
+
+	// Draw the boxes
+	for _, box := range boxes {
+		drawBox(outputImg, box, bounds)
+	}
+
+	// Encode the modified image back to base64
+	var buf bytes.Buffer
+	err = png.Encode(&buf, outputImg)
+	if err != nil {
+		return "", err
+	}
+
+	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
+}
+
+// drawBox draws a single Box on the image
+func drawBox(img *image.RGBA, box box.Box, bounds image.Rectangle) {
+	col := color.RGBA{255, 0, 0, 255} // Red color for the box outline
+	imgWidth := bounds.Dx()
+	imgHeight := bounds.Dy()
+
+	// Convert normalized coordinates to pixel coordinates
+	x1 := int(box.XLeft * float64(imgWidth))
+	x2 := int(box.XRight * float64(imgWidth))
+	y1 := int(box.YTop * float64(imgHeight))
+	y2 := int(box.YBottom * float64(imgHeight))
+
+	// Draw the rectangle outline
+	for x := x1; x <= x2; x++ {
+		img.Set(x, y1, col)
+		img.Set(x, y2, col)
+	}
+	for y := y1; y <= y2; y++ {
+		img.Set(x1, y, col)
+		img.Set(x2, y, col)
+	}
 }

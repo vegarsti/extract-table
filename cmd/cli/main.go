@@ -43,6 +43,7 @@ func main() {
 
 	// Check if table is stored
 	checksum := fmt.Sprintf("%x", sha256.Sum256(imageBytes))
+	fmt.Println(checksum)
 	storedBytes, err := dynamodb.GetTable(checksum)
 	if err != nil {
 		die(err)

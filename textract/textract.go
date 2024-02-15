@@ -264,7 +264,7 @@ func toTable(rows [][]extract.Word, splitAt []float64, splitFunc func([]extract.
 	return table
 }
 
-func ToTableFromOCR(output *textract.DetectDocumentTextOutput) ([][]string, error) {
+func ToLinesFromOCR(output *textract.DetectDocumentTextOutput) ([]box.Box, error) {
 	blocks := make(map[string]*textract.Block)
 	words := 0
 	for _, block := range output.Blocks {
@@ -308,6 +308,5 @@ func ToTableFromOCR(output *textract.DetectDocumentTextOutput) ([][]string, erro
 		// fmt.Printf("%+v\n", box)
 		boxes = append(boxes, box)
 	}
-	table := box.ToTable(boxes)
-	return table, nil
+	return boxes, nil
 }

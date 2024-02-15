@@ -12,9 +12,11 @@ const PNG = FileType("png")
 const PDF = FileType("pdf")
 
 type File struct {
-	Bytes       []byte
-	ContentType FileType
-	Checksum    string
+	Bytes             []byte
+	ContentType       FileType
+	Checksum          string
+	BytesWithBoxes    []byte
+	BytesWithRowBoxes []byte
 }
 
 func checksum(bs []byte) string {

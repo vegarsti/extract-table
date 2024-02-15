@@ -210,7 +210,7 @@ func Assign(rows [][]Box, boxes []Box) {
 	}
 }
 
-func ToTable(boxes []Box) [][]string {
+func ToTable(boxes []Box) ([][]Box, [][]string) {
 	// TODO: Explain this better
 	// Find all regions in x direction with a box,
 	// and same in y direction
@@ -232,5 +232,5 @@ func ToTable(boxes []Box) [][]string {
 			lines[i][j] = rows[i][j].Content
 		}
 	}
-	return lines
+	return rows, lines
 }
