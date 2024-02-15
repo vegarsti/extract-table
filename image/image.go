@@ -2,7 +2,6 @@ package image
 
 import (
 	"bytes"
-	"encoding/base64"
 	"fmt"
 	"image"
 	"image/color"
@@ -13,11 +12,11 @@ import (
 )
 
 // AddBoxes adds bounding boxes to the base64 encoded image and returns a new base64 encoded image
-func AddBoxes(imageBytes []byte, boxes []box.Box) (string, error) {
+func AddBoxes(imageBytes []byte, boxes []box.Box) ([]byte, error) {
 	imgReader := bytes.NewReader(imageBytes)
 	img, _, err := image.Decode(imgReader)
 	if err != nil {
-		return "", fmt.Errorf("decode: %w", err)
+		return nil, fmt.Errorf("decode: %w", err)
 	}
 
 	// Create a new image for the output
@@ -34,10 +33,9 @@ func AddBoxes(imageBytes []byte, boxes []box.Box) (string, error) {
 	var buf bytes.Buffer
 	err = png.Encode(&buf, outputImg)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-
-	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
+	return buf.Bytes(), nil
 }
 
 // drawBox draws a single Box on the image
