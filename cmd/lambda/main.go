@@ -173,6 +173,7 @@ func getTable(file *extract.File) ([][]string, error) {
 			newEncodedImage2, err := image.AddBoxes(file.Bytes, rowsFlattened)
 			if err != nil {
 				log.Printf("add boxes to image 2 failed: %v", err)
+			} else {
 				file.BytesWithBoxes = []byte(newEncodedImage)
 				file.BytesWithRowBoxes = []byte(newEncodedImage2)
 			}
