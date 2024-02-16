@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -11,7 +10,6 @@ import (
 
 	"github.com/vegarsti/extract"
 	"github.com/vegarsti/extract/box"
-	"github.com/vegarsti/extract/dynamodb"
 	"github.com/vegarsti/extract/image"
 	"github.com/vegarsti/extract/textract"
 )
@@ -46,7 +44,9 @@ func main() {
 
 	// Check if table is stored
 	checksum := fmt.Sprintf("%x", sha256.Sum256(imageBytes))
-	// fmt.Println(checksum)
+	fmt.Println(checksum)
+
+	// Get from cache
 	// storedBytes, err := dynamodb.GetTable(checksum)
 	// if err != nil {
 	// 	die(err)
@@ -62,7 +62,7 @@ func main() {
 		Bytes:       imageBytes,
 		ContentType: contentType,
 	}
-	// Don't use Textract's Analyze Document, use OCR and custom algorithm instead
+
 	output, err := textract.DetectDocumentText(file)
 	if err != nil {
 		die(fmt.Errorf("textract text detection failed: %w", err))
@@ -96,13 +96,13 @@ func main() {
 	writeTable(table)
 
 	// store in dynamo db
-	tableJSON, err := json.Marshal(table)
-	if err != nil {
-		die(err)
-	}
-	if err := dynamodb.PutTable(checksum[:], tableJSON, []byte{}); err != nil {
-		die(err)
-	}
+	// tableJSON, err := json.Marshal(table)
+	// if err != nil {
+	// 	die(err)
+	// }
+	// if err := dynamodb.PutTable(checksum[:], tableJSON, []byte{}); err != nil {
+	// 	die(err)
+	// }
 }
 
 func readEnvVars() error {
