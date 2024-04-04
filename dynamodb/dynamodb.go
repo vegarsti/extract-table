@@ -2,6 +2,7 @@ package dynamodb
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -47,6 +48,7 @@ func PutTable(checksum string, table []byte, boxesJSON []byte) error {
 			// "JSONTable": {B: table},
 			"JSONTableCustomDetection": {B: table},
 			"JSONBoxes":                {B: boxesJSON},
+			"Timestamp":                {S: aws.String(time.Now().Format(time.RFC3339))},
 		},
 		TableName: aws.String("Tables"),
 	}
