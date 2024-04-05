@@ -159,9 +159,10 @@ func getTable(file *extract.File) ([][]string, error) {
 		return nil, fmt.Errorf("failed to convert to boxes: %w", err)
 	}
 	rows, table := box.ToTable(boxes)
+	log.Printf("ocr-to-table: %s", time.Since(startAlgorithm).String())
 
 	// Create images with words and cells
-	go func() {
+	func() {
 		if file.ContentType == extract.PNG {
 			imageWithWords, err := image.AddBoxes(file.Bytes, boxes)
 			if err != nil {
@@ -182,10 +183,6 @@ func getTable(file *extract.File) ([][]string, error) {
 		}
 	}()
 
-	log.Printf("ocr-to-table: %s", time.Since(startAlgorithm).String())
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert to table: %w", err)
-	}
 	tableBytes, err = json.MarshalIndent(table, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert table to json: %w", err)
