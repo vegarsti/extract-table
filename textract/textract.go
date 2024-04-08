@@ -288,7 +288,7 @@ func ToLinesFromOCR(output *textract.DetectDocumentTextOutput) ([]box.Box, error
 	// fmt.Printf("%+v", rowMap)
 	// fmt.Printf("%+v", blocks)
 
-	boxes := make([]box.Box, words)
+	boxes := make([]box.Box, 0)
 	for _, cell := range blocks {
 		if *cell.BlockType != "WORD" {
 			continue
