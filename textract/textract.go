@@ -264,7 +264,7 @@ func toTable(rows [][]extract.Word, splitAt []float64, splitFunc func([]extract.
 	return table
 }
 
-func ToLinesFromOCR(output *textract.DetectDocumentTextOutput) ([]box.Box, error) {
+func ToBoxesFromOCR(output *textract.DetectDocumentTextOutput) ([]box.Box, error) {
 	blocks := make(map[string]*textract.Block)
 	words := 0
 	for _, block := range output.Blocks {

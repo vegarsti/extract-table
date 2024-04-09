@@ -154,11 +154,11 @@ func getTable(file *extract.File) ([][]string, error) {
 		return nil, fmt.Errorf("textract text detection failed: %w", err)
 	}
 	startAlgorithm := time.Now()
-	boxes, err := textract.ToLinesFromOCR(output)
+	boxes, err := textract.ToBoxesFromOCR(output)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert to boxes: %w", err)
 	}
-	rows, table := box.ToTable(boxes)
+	rowsBoxesUnsorted, tableStringsSorted := box.ToTable(boxes)
 	log.Printf("ocr-to-table: %s", time.Since(startAlgorithm).String())
 
 	// Create images with words and cells
@@ -170,7 +170,7 @@ func getTable(file *extract.File) ([][]string, error) {
 				return
 			}
 			rowsFlattened := make([]box.Box, 0)
-			for _, row := range rows {
+			for _, row := range rowsBoxesUnsorted {
 				rowsFlattened = append(rowsFlattened, row...)
 			}
 			imageWithCells, err := image.AddBoxes(file.Bytes, rowsFlattened)
@@ -183,17 +183,17 @@ func getTable(file *extract.File) ([][]string, error) {
 		}
 	}()
 
-	tableBytes, err = json.MarshalIndent(table, "", "  ")
+	tableBytes, err = json.MarshalIndent(tableStringsSorted, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert table to json: %w", err)
 	}
 
-	csvBytes := []byte(csv.FromTable(table))
+	csvBytes := []byte(csv.FromTable(tableStringsSorted))
 	url := "https://results.extract-table.com/" + file.Checksum
 	imageURL := url + ".png" // what about jpg?
 	csvURL := url + ".csv"
 	pdfURL := url + ".pdf"
-	htmlBytes := html.FromTable(table, file.ContentType, imageURL, csvURL, pdfURL)
+	htmlBytes := html.FromTable(tableStringsSorted, file.ContentType, imageURL, csvURL, pdfURL)
 
 	g := new(errgroup.Group)
 	g.Go(func() error {
@@ -261,7 +261,7 @@ func getTable(file *extract.File) ([][]string, error) {
 		return nil, err
 	}
 	log.Printf("errgroup: %s", time.Since(startErrgroup).String())
-	return table, nil
+	return tableStringsSorted, nil
 }
 
 func getAPIKey(decodedBodyBytes []byte, contentTypeHeader string, apiKeyHeader string) (string, error) {
@@ -443,3 +443,5 @@ func determineResponseMediaType(acceptResponseHeader string) (string, error) {
 	}
 	return "application/json", nil
 }
+
+// TODO: Store the detected table duh!

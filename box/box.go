@@ -1,6 +1,7 @@
 package box
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 )
@@ -167,15 +168,44 @@ func CartesianProduct(xRegions [][]float64, yRegions [][]float64) [][]Box {
 	return rows
 }
 
-type Cell []Box
+type RowsOfBoxes [][]Box
 
-func (c Cell) Len() int {
+func (c RowsOfBoxes) Len() int {
 	return len(c)
 }
-func (c Cell) Swap(i, j int) {
+
+func (c RowsOfBoxes) Swap(i, j int) {
 	c[i], c[j] = c[j], c[i]
 }
-func (c Cell) Less(i, j int) bool {
+
+func (c RowsOfBoxes) Less(i, j int) bool {
+	// Assume a row is sorted
+	// TODO: Clean up
+
+	// different row
+	if c[i][0].YBottom < c[j][0].YTop {
+		return true // i should be first
+	}
+	if c[i][0].YTop > c[j][0].YBottom {
+		return false // i should be first
+	}
+	// same row, so compare x
+	fmt.Println("This won't happen right?")
+	return c[0][i].XLeft < c[0][j].XLeft
+}
+
+// Boxes
+type Boxes []Box
+
+func (c Boxes) Len() int {
+	return len(c)
+}
+
+func (c Boxes) Swap(i, j int) {
+	c[i], c[j] = c[j], c[i]
+}
+
+func (c Boxes) Less(i, j int) bool {
 	// sort boxes by row, then by x
 	// find row by checking if the bottom y is above the top y.
 	// within a row, use xLeft
@@ -188,6 +218,7 @@ func (c Cell) Less(i, j int) bool {
 		return false // i should be first
 	}
 	// same row, so compare x
+	// fmt.Println(c[i], c[j])
 	return c[i].XLeft < c[j].XLeft
 }
 
@@ -198,7 +229,7 @@ func Assign(rows [][]Box, boxes []Box) {
 	// find all
 	for i := range rows {
 		for j := range rows[i] {
-			c := Cell(boxes)
+			c := Boxes(boxes)
 			sort.Sort(c)
 			boxes = []Box(c)
 			for _, b := range boxes {
@@ -210,6 +241,8 @@ func Assign(rows [][]Box, boxes []Box) {
 	}
 }
 
+// Returns boxes slice and slice of strings.
+// Note that the boxes here are not sorted
 func ToTable(boxes []Box) ([][]Box, [][]string) {
 	// TODO: Explain this better
 	// Find all regions in x direction with a box,
@@ -224,7 +257,12 @@ func ToTable(boxes []Box) ([][]Box, [][]string) {
 	// (mutates rows)
 	Assign(rows, boxes)
 
-	// Create table ([][]string) from [][]box.Box
+	// Sort
+	toSort := RowsOfBoxes(rows)
+	sort.Sort(toSort)
+	rows = [][]Box(toSort)
+
+	// Create table ([][]string) from [][]Box
 	lines := make([][]string, len(rows))
 	for i := range rows {
 		lines[i] = make([]string, len(rows[i]))
@@ -232,5 +270,7 @@ func ToTable(boxes []Box) ([][]Box, [][]string) {
 			lines[i][j] = rows[i][j].Content
 		}
 	}
+	// fmt.Println(lines)
+	// fmt.Println(rows)
 	return rows, lines
 }

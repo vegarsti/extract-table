@@ -2,9 +2,12 @@ package main
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 
@@ -30,17 +33,15 @@ func main() {
 		die(err)
 	}
 
+	// TODO: Detect from file extension? use `file` built-in/utility
 	contentType := extract.PNG
-	if len(os.Args) == 3 {
-		boolean := strings.ToLower(os.Args[2])
-		isPDF, ok := map[string]bool{"f": false, "false": false, "t": true, "true": true}[boolean]
-		if !ok {
-			die(fmt.Errorf("'%s' is invalid for boolean flag isPDF", boolean))
-		}
-		if isPDF {
-			contentType = extract.PDF
-		}
-	}
+
+	// Send image to OCR
+	// Get/store raw output in box.Box format
+	// Store image
+	// Get/store ToTable output in box.Box format
+	// Store image
+	// Print final output in readable format
 
 	// Check if table is stored
 	checksum := fmt.Sprintf("%x", sha256.Sum256(imageBytes))
@@ -67,33 +68,64 @@ func main() {
 	if err != nil {
 		die(fmt.Errorf("textract text detection failed: %w", err))
 	}
-	boxes, err := textract.ToLinesFromOCR(output)
+	boxes, err := textract.ToBoxesFromOCR(output)
 	if err != nil {
 		die(fmt.Errorf("failed to convert to boxes: %w", err))
 	}
+	bs, err := json.MarshalIndent(boxes, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	filenameBoxesRaw := strings.TrimSuffix(filename, filepath.Ext(filename)) + "_boxes_raw.json"
+	if err := os.WriteFile(filenameBoxesRaw, bs, 0644); err != nil {
+		panic(err)
+	}
+
 	rows, table := box.ToTable(boxes)
 
 	// Add boxes
 	if contentType == extract.PNG {
-		newEncodedImage, err := image.AddBoxes(file.Bytes, boxes)
+		imageWithBoxes, err := image.AddBoxes(file.Bytes, boxes)
 		if err != nil {
 			log.Printf("add boxes to image 1 failed: %v", err)
 		} else {
+			filenameBoxes := strings.TrimSuffix(filename, filepath.Ext(filename)) + "_boxes.png"
+			if err := os.WriteFile(filenameBoxes, imageWithBoxes, 0644); err != nil {
+				die(err)
+			}
 			rowsFlattened := make([]box.Box, 0)
 			for _, row := range rows {
 				rowsFlattened = append(rowsFlattened, row...)
 			}
-			newEncodedImage2, err := image.AddBoxes(file.Bytes, rowsFlattened)
+			imageWithBoxes, err = image.AddBoxes(file.Bytes, rowsFlattened)
 			if err != nil {
 				log.Printf("add boxes to image 2 failed: %v", err)
-				file.BytesWithBoxes = []byte(newEncodedImage)
-				file.BytesWithRowBoxes = []byte(newEncodedImage2)
+				file.BytesWithBoxes = []byte(imageWithBoxes)
+				file.BytesWithRowBoxes = []byte(imageWithBoxes)
 			}
-			fmt.Println("hello")
+			filenameRows := strings.TrimSuffix(filename, filepath.Ext(filename)) + "_rows.png"
+			if err := os.WriteFile(filenameRows, imageWithBoxes, 0644); err != nil {
+				die(err)
+			}
 		}
 	}
+	boxesJSON, err := json.MarshalIndent(boxes, "", "  ")
+	if err != nil {
+		die(err)
+	}
+	filenameBoxesJSON := strings.TrimSuffix(filename, filepath.Ext(filename)) + "_boxes.json"
+	if err := os.WriteFile(filenameBoxesJSON, boxesJSON, 0644); err != nil {
+		die(err)
+	}
 
-	writeTable(table)
+	fmt.Printf("%+v\n", table)
+	// filenameTable := strings.TrimSuffix(filename, filepath.Ext(filename)) + "_table.txt"
+	// f, err := os.Create(filenameTable)
+	// if err != nil {
+	// 	die(err)
+	// }
+	// writeTable(bufio.NewWriter(f), table)
+	// writeTable(os.Stdout, table)
 
 	// store in dynamo db
 	// tableJSON, err := json.Marshal(table)
@@ -119,8 +151,9 @@ func die(err error) {
 }
 
 // writeTeable to stdout
-func writeTable(table [][]string) {
-	w := tabwriter.NewWriter(os.Stdout, 4, 4, 2, ' ', tabwriter.Debug)
+func writeTable(wr io.Writer, table [][]string) {
+	fmt.Println(table)
+	w := tabwriter.NewWriter(wr, 4, 4, 2, ' ', tabwriter.Debug)
 	for _, row := range table {
 		for j, cell := range row {
 			fmt.Fprint(w, cell)
