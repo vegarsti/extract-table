@@ -102,6 +102,10 @@ func YRegions(boxes []Box) [][]float64 {
 // Remove duplicates
 func mergeRegions(regions [][]float64) [][]float64 {
 	newRegions := make([][]float64, 0)
+	// sort regions
+	sort.Slice(regions, func(i, j int) bool {
+		return regions[i][0] < regions[j][0]
+	})
 	for _, r := range regions {
 		overlap := false
 		for i, n := range newRegions {
@@ -151,7 +155,7 @@ func max(f1, f2 float64) float64 {
 	return f1
 }
 
-// Given non-overlapping regions in x direction and y direction, create
+// CartesianProduct of sorted non-overlapping regions in x direction and y direction
 func CartesianProduct(xRegions [][]float64, yRegions [][]float64) [][]Box {
 	rows := make([][]Box, len(yRegions))
 	for i, yRegion := range yRegions {
