@@ -128,19 +128,19 @@ func main() {
 
 // getTable either cached from DynamoDB if it has been processed before, or perform OCR with Textract
 func getTable(file *extract.File) ([][]string, error) {
-	startGet := time.Now()
-	tableBytes, err := dynamodb.GetTable(file.Checksum)
-	if err != nil {
-		return nil, fmt.Errorf("dynamodb.GetTable: %w", err)
-	}
-	log.Printf("dynamodb get: %s", time.Since(startGet).String())
-	if tableBytes != nil {
-		var table [][]string
-		if err := json.Unmarshal(tableBytes, &table); err != nil {
-			return nil, fmt.Errorf("failed to convert from json: %w", err)
-		}
-		return table, nil
-	}
+	// startGet := time.Now()
+	// tableBytes, err := dynamodb.GetTable(file.Checksum)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("dynamodb.GetTable: %w", err)
+	// }
+	// log.Printf("dynamodb get: %s", time.Since(startGet).String())
+	// if tableBytes != nil {
+	// 	var table [][]string
+	// 	if err := json.Unmarshal(tableBytes, &table); err != nil {
+	// 		return nil, fmt.Errorf("failed to convert from json: %w", err)
+	// 	}
+	// 	return table, nil
+	// }
 	// Old: Textract's Analyze Document
 	// output, err := textract.AnalyzeDocument(file)
 	// if err != nil {
@@ -183,7 +183,7 @@ func getTable(file *extract.File) ([][]string, error) {
 		}
 	}()
 
-	tableBytes, err = json.MarshalIndent(tableStringsSorted, "", "  ")
+	tableBytes, err := json.MarshalIndent(tableStringsSorted, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert table to json: %w", err)
 	}
