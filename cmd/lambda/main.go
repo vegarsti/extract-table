@@ -53,7 +53,7 @@ func HandleRequest(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRe
 	// check if apiKey is valid
 	log.Printf("api-key was: '%s'", apiKey)
 	if apiKey == "" {
-		err := fmt.Errorf("no api-key was provided")
+		err := fmt.Errorf("no api-key was provided, please email vegard.stikbakke@gmail.com to buy one")
 		return errorResponse(err), nil
 	}
 	valid, err := dynamodb.VerifyAPIKey(apiKey)
